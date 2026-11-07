@@ -3,7 +3,7 @@
 // 좌표: 픽셀 단위, x 오른쪽, y 아래쪽. 위로 올라갈수록 y 가 작아진다(높이 = -y).
 // 플레이어는 행성 궤도를 돌다가(orbit) 탭하면 접선 방향으로 튀어 나가고(fly),
 // 다른 행성의 궤도 반경 안에 들어오면 그 궤도에 붙잡힌다.
-// 비행 경로는 발사 직후 바깥쪽으로 휘었다가 점점 곧게 펴지는 곡선이다(슬링샷). 블랙홀도 경로를 휜다.
+// 비행 경로는 발사 직후 행성 쪽(안쪽)으로 휘었다가 점점 곧게 펴지는 곡선이다. 블랙홀도 경로를 휜다.
 // 조준선·레벨 검증·봇 모두 advance() 하나로 계산하므로 보이는 선과 실제 비행이 정확히 같다.
 
 import { Rng } from "../vendor/pixelfx/core/math.js";
@@ -54,7 +54,7 @@ export const PATH = (() => {
 export function launchState(cx, cy, ro, theta, dir) {
   const x = cx + Math.cos(theta) * ro, y = cy + Math.sin(theta) * ro;
   const tx = -Math.sin(theta) * dir, ty = Math.cos(theta) * dir;
-  return { x, y, vx: tx * SPEED, vy: ty * SPEED, t: 0, curve: -dir, tx, ty };
+  return { x, y, vx: tx * SPEED, vy: ty * SPEED, t: 0, curve: dir, tx, ty }; // curve = dir: 궤도 도는 쪽 = 행성 쪽으로 휜다
 }
 /** PATH 의 k 번째 점을 실제 좌표로 */
 export function pathPoint(L, k, out = [0, 0]) {

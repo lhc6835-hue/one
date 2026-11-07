@@ -20,6 +20,13 @@ async function build() {
   html = html.replace("<!--STYLE-->", () => `<style>\n${css}</style>`).replace("<!--SCRIPT-->", () => `<script>\n${code}</script>`);
   await mkdir(path.join(root, "dist"), { recursive: true });
   await writeFile(path.join(root, "dist/index.html"), html);
+  // claude.ai 아티팩트용: 문서 뼈대는 게시할 때 씌워지므로 doctype/html/head/body 태그를 뺀 판
+  const frag = html
+    .replace(/<!doctype html>\s*/i, "")
+    .replace(/<\/?(html|head|body)[^>]*>\s*/gi, "")
+    .replace(/<meta charset[^>]*>\s*/i, "")
+    .replace(/<meta name="viewport"[^>]*>\s*/i, "");
+  await writeFile(path.join(root, "dist/artifact.html"), frag);
   return html.length;
 }
 

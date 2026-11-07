@@ -142,3 +142,8 @@ body.playing .credit { display: none; }
   .judges { gap: 5px; }
   .card { padding: 16px; }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .logo, .badge { animation: none; }
+  .screen { transition: none; }
+}

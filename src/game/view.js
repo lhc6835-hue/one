@@ -496,8 +496,27 @@ export class View {
     if (Pl.mode === "orbit") {
       const th = Pl.theta, vx = -Math.sin(th) * Pl.dir, vy = Math.cos(th) * Pl.dir;
       const tut = this.tutorial && w.jumps < 4;
-      const len = tut ? 70 : 26;
-      for (let d = 5; d < len; d += 3) p.dot(Pl.x + vx * d, Pl.y + vy * d, R[5], (1 - d / len) * 0.9);
+      const len = tut ? 80 : 44;
+      const x0 = Pl.x + vx * 5, y0 = Pl.y + vy * 5, x1 = Pl.x + vx * len, y1 = Pl.y + vy * len;
+      // 은은한 빛줄기
+      p.glowLine(x0, y0, x1, y1, 5, R[4], 0.22);
+      // 발사 방향으로 흘러가는 점선: 어두운 외곽선 위에 밝은 2px 대시
+      const dash = 4, gap = 3, step = dash + gap, ph = (T * 34) % step;
+      const segs = [];
+      for (let d = 5 + ph - step; d < len - 5; d += step) {
+        const a = Math.max(5, d), b = Math.min(len - 6, d + dash);
+        if (b > a) segs.push([a, b]);
+      }
+      for (const [a, b] of segs) p.beam(Pl.x + vx * a, Pl.y + vy * a, Pl.x + vx * b, Pl.y + vy * b, 4.6, INK, 0.75);
+      for (const [a, b] of segs) {
+        const k = 1 - (a / len) * 0.55;
+        p.beam(Pl.x + vx * a, Pl.y + vy * a, Pl.x + vx * b, Pl.y + vy * b, 2.8, (u, v) => (v < 0.6 ? WHITE : R[5]), k);
+      }
+      // 화살촉
+      const nx = -vy, ny = vx, tx = Pl.x + vx * len, ty = Pl.y + vy * len, bx = tx - vx * 6, by = ty - vy * 6;
+      p.tri(tx + vx * 1.5, ty + vy * 1.5, bx + nx * 4.5, by + ny * 4.5, bx - nx * 4.5, by - ny * 4.5, INK, 0.75);
+      p.tri(tx, ty, bx + nx * 3, by + ny * 3, bx - nx * 3, by - ny * 3, R[5]);
+      p.light(tx, ty, R[5], 0.6);
     }
     // 몸
     p.glow(Pl.x, Pl.y, 14, R[4], 0.6);

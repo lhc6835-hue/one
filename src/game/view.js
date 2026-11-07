@@ -19,7 +19,7 @@ import * as zapHit from "../vendor/pixelfx/fx/lightning/zap-hit.js";
 import * as sunburst from "../vendor/pixelfx/fx/holy/sunburst.js";
 
 import { judgePop, tapRipple, noteBurst, feverBanner } from "./fx-custom.js";
-import { World, orbitR, ZONES, SPEED, PATH, PATH_DT, launchState, pathPoint } from "./world.js";
+import { World, orbitR, ZONES, PATH_DT, FLIGHTS, launchState, pathPoint } from "./world.js";
 import { drawPlanet, drawRock } from "./planets.js";
 import { SKINS } from "./skins.js";
 
@@ -107,8 +107,11 @@ export class View {
     if (this.world) this.world.colW = this.colW;
   }
 
+  flight() { return FLIGHTS[this.skin.flight] || FLIGHTS.hook; }
+
   newWorld(seed) {
-    this.world = new World(seed, this.colW);
+    // 레벨은 지금 혜성의 비행 궤도로 "모든 점프가 가능한지" 검증하며 만든다
+    this.world = new World(seed, this.colW, this.flight());
     this.fx = [];
     this.parts = new Particles({ rng: new Rng(seed ^ 77), sparks: this.skin.ramp.slice(3).reverse().map(hex) });
     this.camY = this.world.player.y - this.H * 0.62;
@@ -118,9 +121,12 @@ export class View {
     this.displayScore = 0;
   }
 
-  setSkin(skin) {
+  /** 혜성을 바꾼다. 궤도가 달라지므로 플레이 중이 아니면 새 세계(새 검증)로 갈아 끼운다. */
+  setSkin(skin, rebuild = true) {
+    const changed = skin.flight !== this.skin.flight;
     this.skin = skin;
-    this.parts.sparks = skin.ramp.slice(3).reverse().map(hex);
+    if (changed && rebuild) this.newWorld(Math.floor(Math.random() * 1e9));
+    else this.parts.sparks = skin.ramp.slice(3).reverse().map(hex);
   }
 
   spawn(mod, opts) {
@@ -494,11 +500,11 @@ export class View {
     }
     // 조준선: 지금 탭하면 날아갈 곡선 경로(실제 비행과 같은 계산). 끝으로 갈수록 흐려지며 사라진다.
     if (Pl.mode === "orbit") {
-      const L = launchState(Pl.planet.x, Pl.planet.y, orbitR(Pl.planet), Pl.theta, Pl.dir);
+      const L = launchState(Pl.planet.x, Pl.planet.y, orbitR(Pl.planet), Pl.theta, Pl.dir, w.prof);
       const tut = this.tutorial && w.jumps < 4;
       const len = tut ? 100 : 70;
-      const perPx = 1 / (SPEED * PATH_DT); // 경로 표의 칸 수 / px
-      const at = (sArc) => pathPoint(L, Math.min(PATH.length - 1, Math.max(0, Math.round(sArc * perPx))), [0, 0]);
+      const perPx = 1 / (w.prof.speed * PATH_DT); // 경로 표의 칸 수 / px
+      const at = (sArc) => pathPoint(L, Math.min(L.path.length - 1, Math.max(0, Math.round(sArc * perPx))), [0, 0]);
       const fade = (sArc) => Math.pow(Math.max(0, 1 - sArc / len), 1.35);
       // 은은한 빛: 짧은 조각마다 세기를 줄여 가며
       for (let sa = 4; sa < len; sa += 6) {

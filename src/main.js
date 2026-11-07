@@ -3,7 +3,7 @@
 import { View } from "./game/view.js";
 import { Sfx } from "./game/sfx.js";
 import { SKINS } from "./game/skins.js";
-import { DEATH } from "./game/world.js";
+import { DEATH, FLIGHTS, flightPath } from "./game/world.js";
 
 const $ = (id) => document.getElementById(id);
 const store = {
@@ -169,19 +169,25 @@ function countUp(el, target) {
 $("retry").addEventListener("click", () => startRun(false));
 $("o-home").addEventListener("click", goTitle);
 
-// ---- 스킨
+// ---- 스킨: 혜성마다 색과 비행 궤도가 다르다. 카드마다 궤도 미리보기가 움직인다.
+let previews = [];
 function renderSkins() {
   $("s-coins").textContent = save.coins;
   const grid = $("skin-grid");
   grid.innerHTML = "";
+  previews = [];
   for (const s of SKINS) {
     const own = save.owned.includes(s.id);
+    const f = FLIGHTS[s.flight];
     const b = document.createElement("button");
     b.className = "skin" + (save.skin === s.id ? " sel" : "") + (own ? "" : " locked");
     const r = s.ramp;
     const bg = s.rainbow ? `conic-gradient(${r.join(",")},${r[0]})` : `radial-gradient(circle at 35% 35%, #fff 0 12%, ${r[5]} 22%, ${r[3]} 50%, ${r[1]} 85%)`;
-    b.innerHTML = `<span class="orb" style="background:${bg};box-shadow:0 0 16px ${r[4]}"></span><span class="nm">${s.name}</span>
+    b.innerHTML = `<span class="sk-top"><span class="orb" style="background:${bg};box-shadow:0 0 14px ${r[4]}"></span><span class="nm">${s.name}</span></span>
+      <canvas class="trail" width="120" height="64" aria-hidden="true"></canvas>
+      <span class="fl">${f.name}</span><span class="ds">${s.desc}</span>
       <span class="pr ${own ? "own" : ""}">${own ? (save.skin === s.id ? "사용 중" : "보유") : "● " + s.cost}</span>`;
+    b.setAttribute("aria-label", `${s.name}, 궤도 ${f.name}: ${s.desc}. ${own ? "보유" : s.cost + " 코인"}`);
     b.disabled = !own && save.coins < s.cost;
     b.addEventListener("click", () => {
       if (!own) {
@@ -197,9 +203,43 @@ function renderSkins() {
       refreshTitle();
     });
     grid.appendChild(b);
+    previews.push({ cv: b.querySelector("canvas"), skin: s, f });
   }
 }
-function openSkins() { renderSkins(); $("skins").classList.add("show"); }
+
+// 궤도 미리보기: 작은 행성의 궤도 맨 위에서 오른쪽으로 쏘았을 때의 실제 비행 경로(게임과 같은 계산)
+function drawPreviews(now) {
+  for (const { cv, skin, f } of previews) {
+    const g = cv.getContext("2d"), W = cv.width, H = cv.height;
+    g.clearRect(0, 0, W, H);
+    const k = 0.5, cx = 18, cy = 34, ro = 13;
+    g.fillStyle = "#2e2a52";
+    g.beginPath(); g.arc(cx, cy, 7, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "rgba(200,190,255,0.45)";
+    for (let i = 0; i < 18; i++) { const a = (i / 18) * Math.PI * 2; g.fillRect(Math.round(cx + Math.cos(a) * ro), Math.round(cy + Math.sin(a) * ro), 1, 1); }
+    const path = flightPath(f), x0 = cx, y0 = cy - ro;
+    const n = Math.min(path.length - 1, Math.round(0.85 / (1 / 240)));
+    const T = ((now / 1000) % 1.3) / 0.85; // 0..1 진행, 잠깐 쉬었다 반복
+    g.lineWidth = 2;
+    g.lineCap = "round";
+    for (let i = 4; i <= n; i += 4) {
+      const [a0, n0] = path[i - 4], [a1, n1] = path[i];
+      const u = i / n;
+      g.strokeStyle = skin.rainbow ? skin.ramp[Math.floor(u * 7) % 7] : skin.ramp[4];
+      g.globalAlpha = 0.85 * (1 - u) ** 1.2;
+      g.beginPath(); g.moveTo(x0 + a0 * k, y0 + n0 * k); g.lineTo(x0 + a1 * k, y0 + n1 * k); g.stroke();
+    }
+    g.globalAlpha = 1;
+    if (T <= 1) {
+      const [a, nn] = path[Math.round(T * n)];
+      const px = x0 + a * k, py = y0 + nn * k;
+      g.fillStyle = skin.ramp[5]; g.beginPath(); g.arc(px, py, 3, 0, Math.PI * 2); g.fill();
+      g.fillStyle = "#fff"; g.fillRect(Math.round(px - 1), Math.round(py - 1), 2, 2);
+    }
+  }
+  if ($("skins").classList.contains("show")) requestAnimationFrame(drawPreviews);
+}
+function openSkins() { renderSkins(); $("skins").classList.add("show"); requestAnimationFrame(drawPreviews); }
 function closeSkins() { $("skins").classList.remove("show"); }
 $("open-skins").addEventListener("click", openSkins);
 $("o-skins").addEventListener("click", openSkins);

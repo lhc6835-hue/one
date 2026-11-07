@@ -1,11 +1,13 @@
 // 자동 플레이 봇: 생성된 맵이 실제로 깰 수 있는지, 판당 얼마나 가는지 확인한다.
 // node tools/bot.mjs [판 수] [반응 지연(초)] [타이밍 오차 표준편차(초)]
 // 봇은 "지금 쏘면 어디에 잡히는지"를 블랙홀·움직이는 행성·소행성까지 넣어 예측하고, 위쪽 새 행성에 잡힐 때만 쏜다.
-import { World, orbitR, STEP, SPEED, advance, launchState } from "../src/game/world.js";
+import { World, orbitR, STEP, SPEED, advance, launchState, FLIGHTS } from "../src/game/world.js";
 
 const games = Number(process.argv[2] || 100);
 const lag = Number(process.argv[3] || 0);
 const sigma = Number(process.argv[4] || 0);
+const flight = FLIGHTS[process.argv[5] || "hook"];
+const maxScore = Number(process.argv[6] || 400);
 let seedN = 7;
 const rnd = () => { seedN = (seedN * 16807) % 2147483647; return seedN / 2147483647; };
 const gauss = () => Math.sqrt(-2 * Math.log(rnd() + 1e-9)) * Math.cos(2 * Math.PI * rnd());
@@ -15,7 +17,7 @@ function predict(w, delay) {
   const th = P.theta + p0.omega * P.dir * delay, ro = orbitR(p0);
   const t0 = w.t + delay;
   const px0 = p0.move ? p0.baseX + Math.sin(t0 * p0.moveF * Math.PI * 2 * 0.25 + p0.moveP) * p0.move : p0.x;
-  const o = launchState(px0, p0.y, ro, th, P.dir);
+  const o = launchState(px0, p0.y, ro, th, P.dir, w.prof);
   const dt = STEP;
   for (let s = 0; s < 600; s++) {
     const t = t0 + s * dt;
@@ -39,9 +41,9 @@ function predict(w, delay) {
 
 const deaths = {}, scores = [];
 for (let g = 0; g < games; g++) {
-  const w = new World(1000 + g, 200);
+  const w = new World(1000 + g, 200, flight);
   let tapAt = -1, steps = 0, nextCheck = 0;
-  while (w.player.mode !== "dead" && steps < 240 * 400 && w.score < 400) {
+  while (w.player.mode !== "dead" && steps < 240 * 400 && w.score < maxScore) {
     const P = w.player;
     if (P.mode === "orbit" && tapAt < 0 && w.t >= nextCheck) {
       // 사람처럼: 앞으로 한 바퀴 안에서 "쏘면 잡히는 구간"을 찾고 그 가운데를 노린다(+ 타이밍 오차)
@@ -68,4 +70,4 @@ for (let g = 0; g < games; g++) {
   scores.push(w.score);
 }
 scores.sort((a, b) => a - b);
-console.log({ games, lag, sigma, median: scores[scores.length >> 1], p10: scores[Math.floor(scores.length * 0.1)], max: scores.at(-1), deaths });
+console.log({ flight: flight.id, games, lag, sigma, median: scores[scores.length >> 1], p10: scores[Math.floor(scores.length * 0.1)], max: scores.at(-1), deaths });

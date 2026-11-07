@@ -3,25 +3,50 @@
 // 좌표: 픽셀 단위, x 오른쪽, y 아래쪽. 위로 올라갈수록 y 가 작아진다(높이 = -y).
 // 플레이어는 행성 궤도를 돌다가(orbit) 탭하면 접선 방향으로 튀어 나가고(fly),
 // 다른 행성의 궤도 반경 안에 들어오면 그 궤도에 붙잡힌다.
-// 비행 경로는 발사 직후 행성 쪽(안쪽)으로 휘었다가 점점 곧게 펴지는 곡선이다. 블랙홀도 경로를 휜다.
+// 비행 경로는 혜성마다 다른 곡선이다(FLIGHTS: 안쪽 곡선, 직진, 뱀, S자…). 블랙홀도 경로를 휜다.
+// 레벨 생성기는 지금 고른 혜성의 궤도로 "모든 점프가 가능한지"를 검증한다.
 // 조준선·레벨 검증·봇 모두 advance() 하나로 계산하므로 보이는 선과 실제 비행이 정확히 같다.
 
 import { Rng } from "../vendor/pixelfx/core/math.js";
 
-export const SPEED = 235; // 발사 속도(px/s)
+export const SPEED = 235; // 기본 발사 속도(px/s)
 export const STEP = 1 / 240; // 물리 고정 스텝
 const TAU = Math.PI * 2;
 
-// 곡선 비행: 진행 방향이 초당 w0 라디안으로 돌기 시작해 tau 초 시간상수로 잦아든다(총 약 w0·tau ≈ 58°)
-export const CURVE = { w0: 3.4, tau: 0.3 };
+// 비행 궤도(혜성마다 다르다). 진행 방향이 도는 속도(rad/s):
+//   rate(t) = side · ( w0·e^(-t/tau) + amp·sin(2π·freq·t + phase)·e^(-t/wtau) )
+// side +1 이면 궤도 도는 쪽(행성 쪽, 안쪽)으로, -1 이면 바깥쪽으로 휜다. speed 는 비행 속도.
+export const FLIGHTS = {
+  hook: { name: "안쪽 곡선", w0: 3.4, tau: 0.3, speed: 235, side: 1 },
+  straight: { name: "직진", w0: 0, tau: 1, speed: 250, side: 1 },
+  outward: { name: "바깥 곡선", w0: 3.4, tau: 0.3, speed: 235, side: -1 },
+  arc: { name: "큰 호", w0: 1.5, tau: 0.9, speed: 225, side: 1 },
+  snap: { name: "갈고리", w0: 7.5, tau: 0.12, speed: 240, side: 1 },
+  snake: { name: "뱀", w0: 0, tau: 1, amp: 5.5, freq: 2.4, phase: 0, wtau: 0.9, speed: 230, side: 1 },
+  drift: { name: "바깥 호", w0: 1.6, tau: 0.8, speed: 225, side: -1 },
+  scurve: { name: "S자", w0: 0, tau: 1, amp: 4.2, freq: 1.25, phase: 0, wtau: 1.2, speed: 235, side: 1 },
+  slow: { name: "느린 곡선", w0: 2.6, tau: 0.35, speed: 185, side: 1 },
+  rocket: { name: "급행", w0: 2.2, tau: 0.25, speed: 300, side: 1 },
+  orbit: { name: "공전", w0: 1.15, tau: 1e9, speed: 220, side: 1 },
+  zigzag: { name: "지그재그", w0: 0, tau: 1, amp: 7, freq: 3.4, phase: Math.PI / 2, wtau: 0.7, speed: 235, side: -1 },
+};
+for (const [id, f] of Object.entries(FLIGHTS)) f.id = id;
+export const DEFAULT_FLIGHT = FLIGHTS.hook;
+
+function turnRate(f, t) {
+  let r = f.w0 ? f.w0 * Math.exp(-t / f.tau) : 0;
+  if (f.amp) r += f.amp * Math.sin(TAU * f.freq * t + f.phase) * Math.exp(-t / f.wtau);
+  return r * f.side;
+}
 
 /**
- * 비행 상태 o = { x, y, vx, vy, t, curve } 를 dt 만큼 진행한다. curve 는 +1/-1(휘는 쪽), 0 이면 직선.
- * 블랙홀에 삼켜지면 "hole" 을 돌려준다.
+ * 비행 상태 o = { x, y, vx, vy, t, curve, prof } 를 dt 만큼 진행한다.
+ * curve 는 궤도 회전 방향(+1/-1), 0 이면 직선. prof 는 FLIGHTS 의 궤도. 블랙홀에 삼켜지면 그 블랙홀을 돌려준다.
  */
 export function advance(o, dt, holes) {
+  const f = o.prof || DEFAULT_FLIGHT;
   if (o.curve) {
-    const a = CURVE.w0 * Math.exp(-o.t / CURVE.tau) * o.curve * dt, c = Math.cos(a), s = Math.sin(a);
+    const a = turnRate(f, o.t) * o.curve * dt, c = Math.cos(a), s = Math.sin(a);
     const vx = o.vx * c - o.vy * s;
     o.vy = o.vx * s + o.vy * c;
     o.vx = vx;
@@ -36,29 +61,30 @@ export function advance(o, dt, holes) {
     }
   }
   const sp = Math.hypot(o.vx, o.vy);
-  o.vx *= SPEED / sp; o.vy *= SPEED / sp;
+  o.vx *= f.speed / sp; o.vy *= f.speed / sp;
   o.x += o.vx * dt; o.y += o.vy * dt;
   o.t += dt;
   return swallowed;
 }
 
-// 블랙홀이 없을 때의 경로 모양은 발사 지점과 방향에만 달렸으므로 한 번 계산해 둔다.
-// PATH[k] = [접선 방향 거리, 휘는 쪽 거리] (curve=+1, k 스텝 = 게임 물리와 같은 1/240 초 간격)
+// 블랙홀이 없을 때의 경로 모양은 발사 지점·방향·궤도 종류에만 달렸으므로 궤도마다 한 번 계산해 둔다.
+// path[k] = [접선 방향 거리, 휘는 쪽 거리] (curve=+1, k 스텝 = 게임 물리와 같은 1/240 초 간격)
 export const PATH_DT = STEP;
-export const PATH = (() => {
-  const o = { x: 0, y: 0, vx: SPEED, vy: 0, t: 0, curve: 1 }, out = [[0, 0]];
+export function flightPath(f = DEFAULT_FLIGHT) {
+  if (f._path) return f._path;
+  const o = { x: 0, y: 0, vx: f.speed, vy: 0, t: 0, curve: 1, prof: f }, out = [[0, 0]];
   for (let k = 0; k < 840; k++) { advance(o, PATH_DT, null); out.push([o.x, o.y]); }
-  return out;
-})();
+  return (f._path = out);
+}
 /** 궤도 위 각도 theta, 회전 방향 dir 에서 쏘았을 때의 발사 상태 */
-export function launchState(cx, cy, ro, theta, dir) {
+export function launchState(cx, cy, ro, theta, dir, f = DEFAULT_FLIGHT) {
   const x = cx + Math.cos(theta) * ro, y = cy + Math.sin(theta) * ro;
   const tx = -Math.sin(theta) * dir, ty = Math.cos(theta) * dir;
-  return { x, y, vx: tx * SPEED, vy: ty * SPEED, t: 0, curve: dir, tx, ty }; // curve = dir: 궤도 도는 쪽 = 행성 쪽으로 휜다
+  return { x, y, vx: tx * f.speed, vy: ty * f.speed, t: 0, curve: dir, prof: f, path: flightPath(f), tx, ty };
 }
-/** PATH 의 k 번째 점을 실제 좌표로 */
+/** 경로 표의 k 번째 점을 실제 좌표로 */
 export function pathPoint(L, k, out = [0, 0]) {
-  const [a, n] = PATH[k], c = L.curve;
+  const [a, n] = L.path[k], c = L.curve;
   out[0] = L.x + a * L.tx + n * c * -L.ty;
   out[1] = L.y + a * L.ty + n * c * L.tx;
   return out;
@@ -99,7 +125,8 @@ export const DEATH = {
 const orbitR = (p) => p.r + p.alt;
 
 export class World {
-  constructor(seed = 1, width = 200) {
+  constructor(seed = 1, width = 200, flight = DEFAULT_FLIGHT) {
+    this.prof = flight;
     this.seed = seed >>> 0 || 1;
     this.R = new Rng(this.seed);
     this.colW = width; // 행성이 놓이는 가운데 기둥의 폭
@@ -225,13 +252,13 @@ export class World {
   /** a 궤도에서 발사해 b 에 잡히는 시간창(초), 두 회전 방향 중 나쁜 쪽 기준 */
   launchWindow(a, b, hole) {
     const ro = orbitR(a), rb = orbitR(b);
-    const N = hole ? 180 : 720;
+    const N = hole ? 180 : 360;
     let worst = Infinity;
     for (const dir of [1, -1]) {
       const hit = new Uint8Array(N);
       for (let i = 0; i < N; i++) {
         const th = (i / N) * TAU;
-        const L = launchState(a.baseX, a.y, ro, th, dir);
+        const L = launchState(a.baseX, a.y, ro, th, dir, this.prof);
         hit[i] = hole ? (this.simulateHits(L, b, hole, a) ? 1 : 0) : this.pathHits(L, b, a) ? 1 : 0;
       }
       let run = 0, bestRun = 0;
@@ -248,8 +275,9 @@ export class World {
   pathHits(L, b, from) {
     const rb = orbitR(b) - 1.5, rf = orbitR(from) - 1, D = Math.hypot(b.baseX - L.x, b.y - L.y) + rb + 10;
     const pt = [0, 0];
-    for (let k = 4; k < PATH.length; k += 4) {
-      if (k * PATH_DT * SPEED > D) return false;
+    const path = L.path, sp = L.prof.speed;
+    for (let k = 4; k < path.length; k += 4) {
+      if (k * PATH_DT * sp > D * 1.7 + 30) return false; // 곡선이라 직선거리보다 길게 본다
       pathPoint(L, k, pt);
       if (Math.hypot(pt[0] - b.baseX, pt[1] - b.y) < rb) return true;
       if (k > 80 && Math.hypot(pt[0] - from.baseX, pt[1] - from.y) < rf) return false;
@@ -261,8 +289,8 @@ export class World {
   /** 블랙홀까지 넣어 실제로 비행시켜 본다 */
   simulateHits(L, b, hole, from) {
     const rb = orbitR(b), dt = STEP; // 실제 게임과 같은 간격(블랙홀 근처는 간격이 다르면 궤적이 갈라진다)
-    const o = { x: L.x, y: L.y, vx: L.vx, vy: L.vy, t: 0, curve: L.curve };
-    const maxSteps = Math.ceil(((Math.hypot(b.baseX - o.x, b.y - o.y) + 70) / SPEED) / dt);
+    const o = { x: L.x, y: L.y, vx: L.vx, vy: L.vy, t: 0, curve: L.curve, prof: L.prof };
+    const maxSteps = Math.ceil(((Math.hypot(b.baseX - o.x, b.y - o.y) * 1.7 + 70) / L.prof.speed) / dt);
     const hs = hole ? [hole] : null;
     for (let s = 0; s < maxSteps; s++) {
       if (advance(o, dt, hs)) return false;
@@ -288,7 +316,7 @@ export class World {
     const P = this.player;
     if (P.mode !== "orbit") return false;
     this.started = true;
-    const L = launchState(P.planet.x, P.planet.y, orbitR(P.planet), P.theta, P.dir);
+    const L = launchState(P.planet.x, P.planet.y, orbitR(P.planet), P.theta, P.dir, this.prof);
     P.vx = L.vx; P.vy = L.vy; P.curve = L.curve;
     P.from = P.planet;
     P.mode = "fly";
@@ -340,7 +368,7 @@ export class World {
       this.placeOnOrbit();
       if (P.y > this.voidY - 2) this.kill("void");
     } else if (P.mode === "fly") {
-      const o = { x: P.x, y: P.y, vx: P.vx, vy: P.vy, t: P.flyT, curve: P.curve || 0 };
+      const o = { x: P.x, y: P.y, vx: P.vx, vy: P.vy, t: P.flyT, curve: P.curve || 0, prof: this.prof };
       const gone = advance(o, dt, this.holes);
       P.x = o.x; P.y = o.y; P.vx = o.vx; P.vy = o.vy; P.flyT = o.t;
       if (gone) { this.kill("hole"); return; }
@@ -417,7 +445,7 @@ export class World {
       this.shield = false;
       const target = this.planets.find((p) => !p.dead && p.y < P.y - 20 && !p.visited) || this.planets[this.planets.length - 1];
       const dx = target.x - P.x, dy = target.y - P.y, L = Math.hypot(dx, dy);
-      P.vx = (dx / L) * SPEED; P.vy = (dy / L) * SPEED;
+      P.vx = (dx / L) * this.prof.speed; P.vy = (dy / L) * this.prof.speed;
       P.mode = "fly"; P.flyT = 0; P.from = P.planet; P.curve = 0;
       if (reason === "void") this.voidY = Math.max(this.voidY, P.y + 60);
       this.emit("shieldBreak", { x: P.x, y: P.y });

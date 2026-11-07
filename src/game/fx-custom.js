@@ -107,8 +107,8 @@ export const feverBanner = {
     }
     const slam = t > 0.2 && t < 0.27;
     p.glow(x, 0, 60, slam ? WHITE : C[(Math.floor(t * 12)) % C.length], (slam ? 0.7 : 0.25) * a);
-    p.text(o.text, x, -14 + Math.sin(t * 20) * (t < 0.6 ? 1 : 0), (gx, gy) =>
-      slam ? WHITE : C[Math.floor(gx / 2 + gy / 3 + t * 14) % C.length], { font: "big", scale: 4, align: "center", outline: INK, a });
+    p.text(o.text, x, -3.5 * (o.scale ?? 4) + Math.sin(t * 20) * (t < 0.6 ? 1 : 0), (gx, gy) =>
+      slam ? WHITE : C[Math.floor(gx / 2 + gy / 3 + t * 14) % C.length], { font: "big", scale: o.scale ?? 4, align: "center", outline: INK, a });
   },
 };
 

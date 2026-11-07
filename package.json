@@ -1,12 +1,13 @@
 {
-  "name": "rhythm-gate",
+  "name": "orbit-hop",
   "version": "1.0.0",
   "private": true,
-  "description": "리듬 문지기 - 업로드한 곡을 분석해 채보를 만드는 원탭 리듬 게임",
+  "description": "궤도 점프 - 원탭 픽셀 우주 점프 게임",
   "type": "module",
   "scripts": {
     "build": "node tools/build.mjs",
-    "dev": "node tools/build.mjs --serve"
+    "dev": "node tools/build.mjs --serve",
+    "bot": "node tools/bot.mjs 60 0.15 0.05"
   },
   "devDependencies": {
     "esbuild": "0.25.10"

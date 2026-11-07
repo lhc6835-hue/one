@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05040e">
+<title>리듬 문지기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;700;900&family=Press+Start+2P&display=swap" rel="stylesheet">
+<!--STYLE-->
+</head>
+<body>
+<canvas id="stage" aria-label="게임 화면"></canvas>
+<div id="scanlines" aria-hidden="true"></div>
+<div id="vignette" aria-hidden="true"></div>
+
+<!-- 타이틀 -->
+<section id="title" class="screen show">
+  <div class="logo">
+    <div class="logo-kr">리듬 문지기</div>
+    <div class="logo-en">RHYTHM&nbsp;GATE</div>
+  </div>
+  <p class="tagline">내 노래가 그대로 채보가 된다. <b>박자에 맞춰 탭 한 번.</b></p>
+  <label id="drop" class="drop" tabindex="0">
+    <input id="file" type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac,.aac" hidden>
+    <span class="drop-icon">♪</span>
+    <span class="drop-main">음악 파일 올리기</span>
+    <span class="drop-sub">눌러서 고르거나 여기로 끌어다 놓으세요 · mp3 / wav / ogg / m4a</span>
+  </label>
+  <div class="row">
+    <button id="demo" class="btn ghost">데모 곡으로 해보기</button>
+    <button id="open-settings" class="btn ghost">설정</button>
+  </div>
+  <p class="howto">노트가 링에 닿는 순간 <kbd>화면 탭</kbd> · <kbd>클릭</kbd> · <kbd>아무 키</kbd> &nbsp;|&nbsp; <kbd>Esc</kbd> 일시정지</p>
+  <p id="title-error" class="error" hidden></p>
+</section>
+
+<!-- 분석 중 -->
+<section id="loading" class="screen">
+  <div class="card narrow">
+    <div class="eyebrow">곡 분석 중</div>
+    <div id="load-name" class="song-name">-</div>
+    <div class="bar"><div id="load-bar"></div></div>
+    <div id="load-step" class="step">파일 읽는 중</div>
+    <p class="tip" id="load-tip"></p>
+  </div>
+</section>
+
+<!-- 곡 정보 · 난이도 선택 -->
+<section id="select" class="screen">
+  <div class="card">
+    <div class="eyebrow">분석 완료</div>
+    <div id="sel-name" class="song-name">-</div>
+    <div class="stats">
+      <div><span id="sel-bpm">-</span><small>BPM</small></div>
+      <div><span id="sel-len">-</span><small>길이</small></div>
+      <div><span id="sel-fever">-</span><small>피버 구간</small></div>
+    </div>
+    <div id="diffs" class="diffs"></div>
+    <div class="speed">
+      <label for="speed">노트 속도 <b id="speed-val">1.0x</b></label>
+      <input id="speed" type="range" min="0.6" max="1.8" step="0.1" value="1">
+    </div>
+    <div class="row">
+      <button id="back-title" class="btn ghost">다른 곡</button>
+      <button id="start" class="btn primary">시작!</button>
+    </div>
+  </div>
+</section>
+
+<!-- 플레이 중 표시 -->
+<div id="playbar" class="playbar" hidden>
+  <span id="play-name"></span>
+  <button id="pause-btn" class="icon" aria-label="일시정지">❚❚</button>
+</div>
+
+<!-- 일시정지 -->
+<section id="paused" class="screen modal">
+  <div class="card narrow center">
+    <div class="eyebrow">일시정지</div>
+    <div class="col">
+      <button id="resume" class="btn primary">계속하기</button>
+      <button id="retry-p" class="btn ghost">처음부터</button>
+      <button id="quit-p" class="btn ghost">그만두기</button>
+    </div>
+  </div>
+</section>
+
+<!-- 결과 -->
+<section id="result" class="screen">
+  <div class="card result">
+    <div class="res-top">
+      <canvas id="rank-cv" class="rank-cv" width="128" height="128"></canvas>
+      <div class="res-main">
+        <div id="res-badge" class="badge" hidden></div>
+        <div id="res-score" class="res-score">0</div>
+        <div id="res-best" class="res-best"></div>
+        <div class="res-line"><span>정확도</span><b id="res-acc">0%</b></div>
+        <div class="res-line"><span>최대 콤보</span><b id="res-combo">0</b></div>
+      </div>
+    </div>
+    <div class="judges">
+      <div class="j perfect"><b id="res-perfect">0</b><small>PERFECT</small></div>
+      <div class="j great"><b id="res-great">0</b><small>GREAT</small></div>
+      <div class="j good"><b id="res-good">0</b><small>GOOD</small></div>
+      <div class="j miss"><b id="res-miss">0</b><small>MISS</small></div>
+    </div>
+    <div class="offset-hint" id="res-offset"></div>
+    <div class="row">
+      <button id="res-change" class="btn ghost">난이도 변경</button>
+      <button id="res-new" class="btn ghost">다른 곡</button>
+      <button id="res-retry" class="btn primary">다시 하기</button>
+    </div>
+  </div>
+</section>
+
+<!-- 설정 -->
+<section id="settings" class="screen modal">
+  <div class="card narrow">
+    <div class="eyebrow">설정</div>
+    <div class="set">
+      <label for="set-offset">판정 오프셋 <b id="set-offset-val">0ms</b></label>
+      <input id="set-offset" type="range" min="-250" max="250" step="5" value="0">
+      <small>노트가 늦게 맞는 느낌이면 +, 일찍 맞는 느낌이면 − 쪽으로. 블루투스 이어폰은 보통 +150ms 안팎이에요.</small>
+    </div>
+    <div class="set">
+      <label for="set-volume">효과음 크기 <b id="set-volume-val">90%</b></label>
+      <input id="set-volume" type="range" min="0" max="1" step="0.05" value="0.9">
+    </div>
+    <label class="check"><input id="set-hit" type="checkbox" checked> 탭 효과음</label>
+    <label class="check"><input id="set-bloom" type="checkbox" checked> 빛 번짐(블룸) 효과</label>
+    <label class="check"><input id="set-nofail" type="checkbox"> 노페일 (HP가 0이 돼도 계속)</label>
+    <div class="row"><button id="close-settings" class="btn primary">닫기</button></div>
+  </div>
+</section>
+
+<footer class="credit">이펙트 <a href="https://github.com/patch-gg/pixelfx" target="_blank" rel="noopener">pixelfx</a> (MIT)</footer>
+<!--SCRIPT-->
+</body>
+</html>

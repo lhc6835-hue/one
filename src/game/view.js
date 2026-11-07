@@ -19,7 +19,7 @@ import * as zapHit from "../vendor/pixelfx/fx/lightning/zap-hit.js";
 import * as sunburst from "../vendor/pixelfx/fx/holy/sunburst.js";
 
 import { judgePop, tapRipple, noteBurst, feverBanner } from "./fx-custom.js";
-import { World, orbitR, ZONES } from "./world.js";
+import { World, orbitR, ZONES, SPEED, PATH, PATH_DT, launchState, pathPoint } from "./world.js";
 import { drawPlanet, drawRock } from "./planets.js";
 import { SKINS } from "./skins.js";
 
@@ -492,31 +492,39 @@ export class View {
       p.line(tr[(i - 1) * 2], tr[(i - 1) * 2 + 1], tr[i * 2], tr[i * 2 + 1], c, u * 0.95);
       if (i % 3 === 0) p.light(tr[i * 2], tr[i * 2 + 1], c, u * 0.35);
     }
-    // 조준선: 지금 탭하면 날아갈 방향
+    // 조준선: 지금 탭하면 날아갈 곡선 경로(실제 비행과 같은 계산). 끝으로 갈수록 흐려지며 사라진다.
     if (Pl.mode === "orbit") {
-      const th = Pl.theta, vx = -Math.sin(th) * Pl.dir, vy = Math.cos(th) * Pl.dir;
+      const L = launchState(Pl.planet.x, Pl.planet.y, orbitR(Pl.planet), Pl.theta, Pl.dir);
       const tut = this.tutorial && w.jumps < 4;
-      const len = tut ? 80 : 44;
-      const x0 = Pl.x + vx * 5, y0 = Pl.y + vy * 5, x1 = Pl.x + vx * len, y1 = Pl.y + vy * len;
-      // 은은한 빛줄기
-      p.glowLine(x0, y0, x1, y1, 5, R[4], 0.22);
-      // 발사 방향으로 흘러가는 점선: 어두운 외곽선 위에 밝은 2px 대시
+      const len = tut ? 100 : 70;
+      const perPx = 1 / (SPEED * PATH_DT); // 경로 표의 칸 수 / px
+      const at = (sArc) => pathPoint(L, Math.min(PATH.length - 1, Math.max(0, Math.round(sArc * perPx))), [0, 0]);
+      const fade = (sArc) => Math.pow(Math.max(0, 1 - sArc / len), 1.35);
+      // 은은한 빛: 짧은 조각마다 세기를 줄여 가며
+      for (let sa = 4; sa < len; sa += 6) {
+        const [x0, y0] = at(sa), [x1, y1] = at(sa + 6);
+        p.glowLine(x0, y0, x1, y1, 5, R[4], 0.24 * fade(sa));
+      }
+      // 발사 방향으로 흘러가는 점선(어두운 외곽선 위에 밝은 대시)
       const dash = 4, gap = 3, step = dash + gap, ph = (T * 34) % step;
       const segs = [];
-      for (let d = 5 + ph - step; d < len - 5; d += step) {
-        const a = Math.max(5, d), b = Math.min(len - 6, d + dash);
-        if (b > a) segs.push([a, b]);
+      for (let d = 5 + ph - step; d < len; d += step) {
+        const s0 = Math.max(5, d), s1 = Math.min(len, d + dash);
+        if (s1 > s0 && fade(s0) > 0.04) segs.push([s0, s1]);
       }
-      for (const [a, b] of segs) p.beam(Pl.x + vx * a, Pl.y + vy * a, Pl.x + vx * b, Pl.y + vy * b, 4.6, INK, 0.75);
-      for (const [a, b] of segs) {
-        const k = 1 - (a / len) * 0.55;
-        p.beam(Pl.x + vx * a, Pl.y + vy * a, Pl.x + vx * b, Pl.y + vy * b, 2.8, (u, v) => (v < 0.6 ? WHITE : R[5]), k);
-      }
-      // 화살촉
-      const nx = -vy, ny = vx, tx = Pl.x + vx * len, ty = Pl.y + vy * len, bx = tx - vx * 6, by = ty - vy * 6;
-      p.tri(tx + vx * 1.5, ty + vy * 1.5, bx + nx * 4.5, by + ny * 4.5, bx - nx * 4.5, by - ny * 4.5, INK, 0.75);
-      p.tri(tx, ty, bx + nx * 3, by + ny * 3, bx - nx * 3, by - ny * 3, R[5]);
-      p.light(tx, ty, R[5], 0.6);
+      const piece = (s0, s1, wdt, c, k) => {
+        // 대시 하나를 1.5px 마디로 나눠 곡선을 따라 그린다
+        let [px, py] = at(s0);
+        for (let sa = s0 + 1.5; sa <= s1 + 0.01; sa += 1.5) {
+          const [nx, ny] = at(Math.min(sa, s1));
+          p.beam(px, py, nx, ny, wdt, c, k);
+          px = nx; py = ny;
+        }
+      };
+      // 끝으로 갈수록 가늘어지고(굵기) 옅어진다(디더)
+      const wd = (s0) => 0.5 + 0.5 * fade(s0);
+      for (const [s0, s1] of segs) piece(s0, s1, 1.8 + 2.8 * wd(s0), INK, 0.7 * fade(s0));
+      for (const [s0, s1] of segs) piece(s0, s1, 1 + 1.8 * wd(s0), (u, v) => (v < 0.6 ? WHITE : R[5]), Math.min(1, 1.2 * fade(s0)));
     }
     // 몸
     p.glow(Pl.x, Pl.y, 14, R[4], 0.6);

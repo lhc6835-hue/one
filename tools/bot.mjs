@@ -1,7 +1,7 @@
 // 자동 플레이 봇: 생성된 맵이 실제로 깰 수 있는지, 판당 얼마나 가는지 확인한다.
 // node tools/bot.mjs [판 수] [반응 지연(초)] [타이밍 오차 표준편차(초)]
 // 봇은 "지금 쏘면 어디에 잡히는지"를 블랙홀·움직이는 행성·소행성까지 넣어 예측하고, 위쪽 새 행성에 잡힐 때만 쏜다.
-import { World, orbitR, STEP, SPEED } from "../src/game/world.js";
+import { World, orbitR, STEP, SPEED, advance, launchState } from "../src/game/world.js";
 
 const games = Number(process.argv[2] || 100);
 const lag = Number(process.argv[3] || 0);
@@ -15,19 +15,14 @@ function predict(w, delay) {
   const th = P.theta + p0.omega * P.dir * delay, ro = orbitR(p0);
   const t0 = w.t + delay;
   const px0 = p0.move ? p0.baseX + Math.sin(t0 * p0.moveF * Math.PI * 2 * 0.25 + p0.moveP) * p0.move : p0.x;
-  let x = px0 + Math.cos(th) * ro, y = p0.y + Math.sin(th) * ro;
-  let vx = -Math.sin(th) * P.dir * SPEED, vy = Math.cos(th) * P.dir * SPEED;
-  const dt = 1 / 120;
-  for (let s = 0; s < 300; s++) {
+  const o = launchState(px0, p0.y, ro, th, P.dir);
+  const dt = STEP;
+  for (let s = 0; s < 600; s++) {
     const t = t0 + s * dt;
-    for (const h of w.holes) {
-      const dx = h.x - x, dy = h.y - y, d2 = dx * dx + dy * dy, d = Math.sqrt(d2);
-      if (d < h.reach) { const a = h.pull / Math.max(60, d2); vx += (dx / d) * a * dt; vy += (dy / d) * a * dt; if (d < h.core + 3) return null; }
-    }
-    const sp = Math.hypot(vx, vy); vx *= SPEED / sp; vy *= SPEED / sp;
-    x += vx * dt; y += vy * dt;
+    if (advance(o, dt, w.holes)) return null;
+    const { x, y } = o;
     for (const r of w.rocks) {
-      let rx = r.x + r.vx * (t - w.t);
+      const rx = r.x + r.vx * (t - w.t);
       if (Math.abs(rx - x) < r.r + 6 && Math.abs(r.y - y) < r.r + 6) return null;
     }
     for (const q of w.planets) {
@@ -51,13 +46,17 @@ for (let g = 0; g < games; g++) {
     if (P.mode === "orbit" && tapAt < 0 && w.t >= nextCheck) {
       // 사람처럼: 앞으로 한 바퀴 안에서 "쏘면 잡히는 구간"을 찾고 그 가운데를 노린다(+ 타이밍 오차)
       const period = (2 * Math.PI) / P.planet.omega;
-      let a = -1, b = -1;
+      // 한 바퀴 동안의 발사 가능 구간들을 모으고, 0.08초 이상인 첫 구간(없으면 가장 긴 구간)의 가운데를 노린다
+      const wins = [];
+      let a = -1;
       for (let d = lag; d < lag + period; d += 1 / 240) {
         const ok = predict(w, d);
         if (ok && a < 0) a = d;
-        if (!ok && a >= 0) { b = d; break; }
+        if (!ok && a >= 0) { wins.push([a, d]); a = -1; }
       }
-      if (a >= 0) tapAt = w.t + Math.max(0, (b > 0 ? (a + b) / 2 : a + 0.05) + gauss() * sigma);
+      if (a >= 0) wins.push([a, lag + period]);
+      const pick = wins.find(([x, y]) => y - x >= 0.08) || wins.sort((u, v) => (v[1] - v[0]) - (u[1] - u[0]))[0];
+      if (pick) tapAt = w.t + Math.max(0, (pick[0] + pick[1]) / 2 + gauss() * sigma);
       nextCheck = tapAt >= 0 ? Infinity : w.t + 0.1;
     }
     if (tapAt >= 0 && w.t >= tapAt) { w.tap(); tapAt = -1; nextCheck = 0; }

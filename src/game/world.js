@@ -1,14 +1,68 @@
 // 궤도 점프: 게임 규칙과 물리. 화면·소리와 분리돼 있어서 Node 에서도 돌릴 수 있다(봇 검증용).
 //
 // 좌표: 픽셀 단위, x 오른쪽, y 아래쪽. 위로 올라갈수록 y 가 작아진다(높이 = -y).
-// 플레이어는 행성 궤도를 돌다가(orbit) 탭하면 접선 방향으로 직선 비행(fly)하고,
-// 다른 행성의 궤도 반경 안에 들어오면 그 궤도에 붙잡힌다. 블랙홀만 비행 경로를 휜다.
+// 플레이어는 행성 궤도를 돌다가(orbit) 탭하면 접선 방향으로 튀어 나가고(fly),
+// 다른 행성의 궤도 반경 안에 들어오면 그 궤도에 붙잡힌다.
+// 비행 경로는 발사 직후 바깥쪽으로 휘었다가 점점 곧게 펴지는 곡선이다(슬링샷). 블랙홀도 경로를 휜다.
+// 조준선·레벨 검증·봇 모두 advance() 하나로 계산하므로 보이는 선과 실제 비행이 정확히 같다.
 
 import { Rng } from "../vendor/pixelfx/core/math.js";
 
 export const SPEED = 235; // 발사 속도(px/s)
 export const STEP = 1 / 240; // 물리 고정 스텝
 const TAU = Math.PI * 2;
+
+// 곡선 비행: 진행 방향이 초당 w0 라디안으로 돌기 시작해 tau 초 시간상수로 잦아든다(총 약 w0·tau ≈ 58°)
+export const CURVE = { w0: 3.4, tau: 0.3 };
+
+/**
+ * 비행 상태 o = { x, y, vx, vy, t, curve } 를 dt 만큼 진행한다. curve 는 +1/-1(휘는 쪽), 0 이면 직선.
+ * 블랙홀에 삼켜지면 "hole" 을 돌려준다.
+ */
+export function advance(o, dt, holes) {
+  if (o.curve) {
+    const a = CURVE.w0 * Math.exp(-o.t / CURVE.tau) * o.curve * dt, c = Math.cos(a), s = Math.sin(a);
+    const vx = o.vx * c - o.vy * s;
+    o.vy = o.vx * s + o.vy * c;
+    o.vx = vx;
+  }
+  let swallowed = null;
+  if (holes) for (const h of holes) {
+    const dx = h.x - o.x, dy = h.y - o.y, d2 = dx * dx + dy * dy, d = Math.sqrt(d2);
+    if (d < h.reach) {
+      const a = h.pull / Math.max(60, d2);
+      o.vx += (dx / d) * a * dt; o.vy += (dy / d) * a * dt;
+      if (d < h.core + 1.5) swallowed = h;
+    }
+  }
+  const sp = Math.hypot(o.vx, o.vy);
+  o.vx *= SPEED / sp; o.vy *= SPEED / sp;
+  o.x += o.vx * dt; o.y += o.vy * dt;
+  o.t += dt;
+  return swallowed;
+}
+
+// 블랙홀이 없을 때의 경로 모양은 발사 지점과 방향에만 달렸으므로 한 번 계산해 둔다.
+// PATH[k] = [접선 방향 거리, 휘는 쪽 거리] (curve=+1, k 스텝 = 게임 물리와 같은 1/240 초 간격)
+export const PATH_DT = STEP;
+export const PATH = (() => {
+  const o = { x: 0, y: 0, vx: SPEED, vy: 0, t: 0, curve: 1 }, out = [[0, 0]];
+  for (let k = 0; k < 840; k++) { advance(o, PATH_DT, null); out.push([o.x, o.y]); }
+  return out;
+})();
+/** 궤도 위 각도 theta, 회전 방향 dir 에서 쏘았을 때의 발사 상태 */
+export function launchState(cx, cy, ro, theta, dir) {
+  const x = cx + Math.cos(theta) * ro, y = cy + Math.sin(theta) * ro;
+  const tx = -Math.sin(theta) * dir, ty = Math.cos(theta) * dir;
+  return { x, y, vx: tx * SPEED, vy: ty * SPEED, t: 0, curve: -dir, tx, ty };
+}
+/** PATH 의 k 번째 점을 실제 좌표로 */
+export function pathPoint(L, k, out = [0, 0]) {
+  const [a, n] = PATH[k], c = L.curve;
+  out[0] = L.x + a * L.tx + n * c * -L.ty;
+  out[1] = L.y + a * L.ty + n * c * L.tx;
+  return out;
+}
 
 // 행성 종류
 export const KINDS = {
@@ -177,14 +231,8 @@ export class World {
       const hit = new Uint8Array(N);
       for (let i = 0; i < N; i++) {
         const th = (i / N) * TAU;
-        const x = a.baseX + Math.cos(th) * ro, y = a.y + Math.sin(th) * ro;
-        const tx = -Math.sin(th) * dir, ty = Math.cos(th) * dir;
-        if (hole) hit[i] = this.simulateHits(x, y, tx * SPEED, ty * SPEED, b, hole, a) ? 1 : 0;
-        else {
-          // 블랙홀이 없으면 직선이므로 계산으로 끝낸다
-          const dx = b.baseX - x, dy = b.y - y, along = dx * tx + dy * ty, perp = Math.abs(dx * ty - dy * tx);
-          hit[i] = along > 0 && perp < rb - 1.5 ? 1 : 0;
-        }
+        const L = launchState(a.baseX, a.y, ro, th, dir);
+        hit[i] = hole ? (this.simulateHits(L, b, hole, a) ? 1 : 0) : this.pathHits(L, b, a) ? 1 : 0;
       }
       let run = 0, bestRun = 0;
       for (let k = 0; k < N * 2; k++) {
@@ -196,20 +244,32 @@ export class World {
     return worst;
   }
 
-  simulateHits(x, y, vx, vy, b, hole, from) {
-    const rb = orbitR(b), dt = 1 / 90;
-    const maxSteps = Math.ceil(((Math.hypot(b.baseX - x, b.y - y) + 60) / SPEED) * 90);
+  /** 미리 계산한 곡선 경로로 b 의 궤도에 닿는지(블랙홀 없음) */
+  pathHits(L, b, from) {
+    const rb = orbitR(b) - 1.5, rf = orbitR(from) - 1, D = Math.hypot(b.baseX - L.x, b.y - L.y) + rb + 10;
+    const pt = [0, 0];
+    for (let k = 4; k < PATH.length; k += 4) {
+      if (k * PATH_DT * SPEED > D) return false;
+      pathPoint(L, k, pt);
+      if (Math.hypot(pt[0] - b.baseX, pt[1] - b.y) < rb) return true;
+      if (k > 80 && Math.hypot(pt[0] - from.baseX, pt[1] - from.y) < rf) return false;
+      if (Math.abs(pt[0]) > this.colW / 2 + 50) return false;
+    }
+    return false;
+  }
+
+  /** 블랙홀까지 넣어 실제로 비행시켜 본다 */
+  simulateHits(L, b, hole, from) {
+    const rb = orbitR(b), dt = STEP; // 실제 게임과 같은 간격(블랙홀 근처는 간격이 다르면 궤적이 갈라진다)
+    const o = { x: L.x, y: L.y, vx: L.vx, vy: L.vy, t: 0, curve: L.curve };
+    const maxSteps = Math.ceil(((Math.hypot(b.baseX - o.x, b.y - o.y) + 70) / SPEED) / dt);
+    const hs = hole ? [hole] : null;
     for (let s = 0; s < maxSteps; s++) {
-      if (hole) {
-        const dx = hole.x - x, dy = hole.y - y, d2 = dx * dx + dy * dy, d = Math.sqrt(d2);
-        if (d < hole.core + 2) return false;
-        if (d < hole.reach) { const a = hole.pull / Math.max(60, d2); vx += (dx / d) * a * dt; vy += (dy / d) * a * dt; }
-        const sp = Math.hypot(vx, vy); vx *= SPEED / sp; vy *= SPEED / sp;
-      }
-      x += vx * dt; y += vy * dt;
-      if (Math.hypot(x - b.baseX, y - b.y) < rb - 1) return true;
-      if (s > 20 && Math.hypot(x - from.baseX, y - from.y) < orbitR(from) - 1) return false;
-      if (Math.abs(x) > this.colW / 2 + 50) return false;
+      if (advance(o, dt, hs)) return false;
+      if (hole && Math.hypot(hole.x - o.x, hole.y - o.y) < hole.core + 2) return false;
+      if (Math.hypot(o.x - b.baseX, o.y - b.y) < rb - 1) return true;
+      if (s > 50 && Math.hypot(o.x - from.baseX, o.y - from.y) < orbitR(from) - 1) return false;
+      if (Math.abs(o.x) > this.colW / 2 + 50) return false;
     }
     return false;
   }
@@ -228,9 +288,8 @@ export class World {
     const P = this.player;
     if (P.mode !== "orbit") return false;
     this.started = true;
-    const th = P.theta, s = SPEED;
-    P.vx = -Math.sin(th) * P.dir * s;
-    P.vy = Math.cos(th) * P.dir * s;
+    const L = launchState(P.planet.x, P.planet.y, orbitR(P.planet), P.theta, P.dir);
+    P.vx = L.vx; P.vy = L.vy; P.curve = L.curve;
     P.from = P.planet;
     P.mode = "fly";
     P.flyT = 0;
@@ -281,24 +340,19 @@ export class World {
       this.placeOnOrbit();
       if (P.y > this.voidY - 2) this.kill("void");
     } else if (P.mode === "fly") {
-      P.flyT += dt;
+      const o = { x: P.x, y: P.y, vx: P.vx, vy: P.vy, t: P.flyT, curve: P.curve || 0 };
+      const gone = advance(o, dt, this.holes);
+      P.x = o.x; P.y = o.y; P.vx = o.vx; P.vy = o.vy; P.flyT = o.t;
+      if (gone) { this.kill("hole"); return; }
       for (const h of this.holes) {
-        const dx = h.x - P.x, dy = h.y - P.y, d2 = dx * dx + dy * dy, d = Math.sqrt(d2);
-        if (d < h.reach) {
-          const a = h.pull / Math.max(60, d2);
-          P.vx += (dx / d) * a * dt; P.vy += (dy / d) * a * dt;
-          if (d < h.core + 1.5) { this.kill("hole"); return; }
-          if (d < h.core + 13 && !h.passed) { h.passed = true; h.close = true; }
-        } else if (h.close) {
+        const d = Math.hypot(h.x - P.x, h.y - P.y);
+        if (d < h.core + 13 && !h.passed) { h.passed = true; h.close = true; }
+        else if (h.close && d > h.reach) {
           h.close = false;
           this.score += 2;
           this.emit("closeCall", { x: P.x, y: P.y });
         }
       }
-      // 속도는 일정하게 유지(블랙홀은 방향만 휜다)
-      const sp = Math.hypot(P.vx, P.vy), want = SPEED;
-      P.vx *= want / sp; P.vy *= want / sp;
-      P.x += P.vx * dt; P.y += P.vy * dt;
       // 포획
       for (const p of this.planets) {
         if (p.dead) continue;
@@ -364,7 +418,7 @@ export class World {
       const target = this.planets.find((p) => !p.dead && p.y < P.y - 20 && !p.visited) || this.planets[this.planets.length - 1];
       const dx = target.x - P.x, dy = target.y - P.y, L = Math.hypot(dx, dy);
       P.vx = (dx / L) * SPEED; P.vy = (dy / L) * SPEED;
-      P.mode = "fly"; P.flyT = 0; P.from = P.planet;
+      P.mode = "fly"; P.flyT = 0; P.from = P.planet; P.curve = 0;
       if (reason === "void") this.voidY = Math.max(this.voidY, P.y + 60);
       this.emit("shieldBreak", { x: P.x, y: P.y });
       return;

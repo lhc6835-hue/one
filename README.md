@@ -47,7 +47,8 @@ npm run build      # dist/index.html 한 파일로 빌드
 npm run dev        # http://localhost:5173
 ```
 
-GitHub Pages 배포는 빌드한 `dist/index.html`을 `gh-pages` 브랜치에 올리면 돼요.
+GitHub Pages 배포는 빌드한 `dist/` 안의 `index.html`과 `music/`을 `gh-pages` 브랜치에 올리면 돼요.
+음악은 `fetch`로 불러오기 때문에 `dist/index.html`을 더블클릭해서 열면 합성 패드만 나와요. `npm run dev`로 띄워 주세요.
 
 ## 연출
 
@@ -64,7 +65,19 @@ GitHub Pages 배포는 빌드한 `dist/index.html`을 `gh-pages` 브랜치에 �
 - **게임 전용 이펙트:** `src/game/fx-custom.js`. 판정 글자, 궤도 물결, 별가루, 구역 배너를
   pixelfx 규약으로 만들었어요.
 - **손맛:** PERFECT 때 0.045초 히트스톱, 화면 흔들림, 섬광, 죽을 때 슬로모션.
-- **소리:** 전부 WebAudio로 즉석 합성해요. 포획음이 콤보를 따라 5음계로 올라가고, 잔잔한 배경 패드가 깔려요.
+- **효과음:** WebAudio로 즉석 합성해요. 포획음이 콤보를 따라 5음계로 올라가요.
+- **배경음악:** CC0 칩튠 트랙을 구역에 따라 크로스페이드해요. 게임오버와 일시정지 때는 음악이 먹먹해지고, 끝날 때 징글이 나와요.
+  트랙을 못 불러오면(예: `file://`로 열었을 때) 합성 패드로 대신해요.
+
+  | 쓰는 곳 | 곡 | 출처 · 라이선스 |
+  |---|---|---|
+  | 타이틀 | Stage Select | Juhani Junkala, *Chiptune Adventures* · CC0 |
+  | 저궤도 · 성운 | Stage 1 | 〃 |
+  | 소행성대 · 심우주 | Stage 2 | 〃 |
+  | 특이점 | Boss Fight | 〃 |
+  | 게임오버 · 신기록 징글 | game_over, victory | Beatscribe, [homebrew_vgm](https://github.com/Beatscribe/homebrew_vgm) · CC0 |
+
+  파일은 `public/music/`에 OGG와 MP3로 들어 있고(사파리용 MP3), 빌드할 때 `dist/music/`으로 복사돼요.
 
 ## 구조
 
@@ -84,4 +97,5 @@ tools/bot.mjs           공정성·난이도 검증 봇
 ## 크레딧
 
 - pixelfx © 2026 Patch, Hugo Duprez: MIT (`src/vendor/pixelfx/LICENSE`, `NOTICE.md`)
+- 음악: Juhani Junkala (CC0), Beatscribe (CC0)
 - 폰트: Black Han Sans, Noto Sans KR, Press Start 2P (Google Fonts, OFL)

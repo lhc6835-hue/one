@@ -1,4 +1,5 @@
-// 소리: 전부 WebAudio 로 즉석 합성한다. 포획음은 콤보가 이어질수록 5음계를 따라 올라간다.
+// 소리: 효과음은 WebAudio 로 즉석 합성하고(포획음은 콤보를 따라 5음계로 올라간다),
+// 배경음악은 CC0 칩튠 트랙을 불러와 구역마다 크로스페이드한다.
 
 const SCALE = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26, 28, 31];
 
@@ -13,7 +14,16 @@ export class Sfx {
     this.master.connect(comp).connect(this.ctx.destination);
     this.musicBus = this.ctx.createGain();
     this.musicBus.gain.value = 0.0;
-    this.musicBus.connect(this.master);
+    this.duckFilter = this.ctx.createBiquadFilter();
+    this.duckFilter.type = "lowpass";
+    this.duckFilter.frequency.value = 20000;
+    this.musicBus.connect(this.duckFilter).connect(this.master);
+    // 배경음악: CC0 칩튠 트랙(public/music). 못 불러오면 합성 패드로 대신한다.
+    const a = document.createElement("audio");
+    this.ext = a.canPlayType('audio/ogg; codecs="vorbis"') ? "ogg" : "mp3";
+    this.buffers = {};
+    this.want = "title";
+    this.current = null;
     this.on = true;
     this.noise = this.ctx.createBuffer(1, this.ctx.sampleRate, this.ctx.sampleRate);
     const d = this.noise.getChannelData(0);
@@ -23,7 +33,80 @@ export class Sfx {
 
   unlock() {
     if (this.ctx.state === "suspended") this.ctx.resume();
-    if (!this.musicStarted) { this.musicStarted = true; this.startMusic(); }
+    if (!this.musicStarted) {
+      this.musicStarted = true;
+      this.musicBus.gain.setValueAtTime(0.55, this.ctx.currentTime);
+      this.playMusic(this.want);
+      for (const n of ["stage1", "stage2", "boss", "jingle-over", "jingle-best"]) this.load(n);
+    }
+  }
+
+  load(name) {
+    if (this.buffers[name]) return this.buffers[name];
+    const get = async (ext) => {
+      const r = await fetch(`music/${name}.${ext}`);
+      if (!r.ok) throw new Error(r.status);
+      return this.ctx.decodeAudioData(await r.arrayBuffer());
+    };
+    this.buffers[name] = get(this.ext).catch(() => get(this.ext === "ogg" ? "mp3" : "ogg")).then((buf) => ({ buf, ...this.loopPoints(buf) })).catch(() => null);
+    return this.buffers[name];
+  }
+
+  // mp3 는 앞뒤에 인코더 무음이 붙어서 그대로 반복하면 끊긴다. 무음을 건너뛴 구간만 반복한다.
+  loopPoints(buf) {
+    const d = buf.getChannelData(0), sr = buf.sampleRate, th = 1e-4;
+    let a = 0, b = d.length - 1;
+    const lim = Math.min(d.length, Math.floor(sr * 0.15));
+    while (a < lim && Math.abs(d[a]) < th) a++;
+    while (b > d.length - lim && Math.abs(d[b]) < th) b--;
+    if (a >= lim) a = 0;
+    return { start: a / sr, end: (b + 1) / sr };
+  }
+
+  async playMusic(name) {
+    this.want = name;
+    if (!this.musicStarted) return;
+    if (this.current && this.current.name === name) return;
+    const t = await this.load(name);
+    if (this.want !== name || (this.current && this.current.name === name)) return;
+    if (!t) { if (!this.synthStarted) { this.synthStarted = true; this.startMusic(); } return; }
+    const c = this.ctx, now = c.currentTime;
+    const old = this.current;
+    if (old) {
+      old.gain.gain.cancelScheduledValues(now);
+      old.gain.gain.setValueAtTime(old.gain.gain.value, now);
+      old.gain.gain.linearRampToValueAtTime(0, now + 0.9);
+      old.src.stop(now + 1);
+    }
+    const src = c.createBufferSource(), g = c.createGain();
+    src.buffer = t.buf;
+    src.loop = true;
+    src.loopStart = t.start;
+    src.loopEnd = t.end;
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(1, now + (old ? 0.9 : 0.4));
+    src.connect(g).connect(this.musicBus);
+    src.start(now, t.start);
+    this.current = { name, src, gain: g };
+  }
+
+  /** 게임오버·일시정지 때 음악을 먹먹하게 */
+  duck(on) {
+    const t = this.ctx.currentTime;
+    this.duckFilter.frequency.cancelScheduledValues(t);
+    this.duckFilter.frequency.setTargetAtTime(on ? 500 : 20000, t, on ? 0.15 : 0.3);
+    this.musicBus.gain.cancelScheduledValues(t);
+    this.musicBus.gain.setTargetAtTime(this.musicStarted ? (on ? 0.25 : 0.55) : 0, t, 0.2);
+  }
+
+  async jingle(name, at = 0) {
+    const t = await this.load(name);
+    if (!t) return;
+    const src = this.ctx.createBufferSource(), g = this.ctx.createGain();
+    src.buffer = t.buf;
+    g.gain.value = 0.7;
+    src.connect(g).connect(this.master);
+    src.start(this.ctx.currentTime + at, t.start);
   }
 
   setOn(on) {
@@ -90,10 +173,11 @@ export class Sfx {
   zone() { [0, 4, 7, 12, 16].forEach((s, i) => this.tone("triangle", 392 * Math.pow(2, s / 12), 0, 0.5, 0.1, i * 0.07)); }
   best() { [0, 7, 12, 19, 24].forEach((s, i) => this.tone("square", 523 * Math.pow(2, s / 12), 0, 0.22, 0.05, i * 0.06)); }
 
-  // 잔잔한 배경음: Am - F - C - G 패드 + 느린 아르페지오
+  // 예비 배경음(트랙을 못 불러올 때): Am - F - C - G 패드 + 느린 아르페지오
   startMusic() {
     const c = this.ctx;
     this.musicBus.gain.setTargetAtTime(0.5, c.currentTime, 1.5);
+    this.synthStarted = true;
     const chords = [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]];
     const midi = (m) => 440 * Math.pow(2, (m - 69) / 12);
     const bar = 4.0;
@@ -102,6 +186,7 @@ export class Sfx {
     lp.type = "lowpass"; lp.frequency.value = 1100; lp.Q.value = 0.5;
     lp.connect(this.musicBus);
     const schedule = () => {
+      if (this.current) return; // 트랙이 나중에라도 불러와지면 합성 패드는 멈춘다
       while (next < c.currentTime + 1.5) {
         const ch = chords[k % 4];
         for (const m of ch) for (const det of [-7, 7]) {

@@ -46,8 +46,11 @@ function refreshTitle() {
 refreshTitle();
 
 // ---- 시작 / 다시
+const trackFor = (zone) => (zone >= 4 ? "boss" : zone >= 2 ? "stage2" : "stage1");
 function startRun(fromTitle) {
   sfx.unlock();
+  sfx.playMusic(trackFor(0));
+  sfx.duck(false);
   if (!fromTitle) view.newWorld(Math.floor(Math.random() * 1e9));
   view.best = save.best;
   view.tutorial = save.games < 2;
@@ -56,6 +59,8 @@ function startRun(fromTitle) {
 }
 function goTitle() {
   mode = "title";
+  sfx.playMusic("title");
+  sfx.duck(false);
   view.newWorld(Math.floor(Math.random() * 1e9));
   refreshTitle();
   showScreen("title");
@@ -97,16 +102,20 @@ window.addEventListener("keydown", (e) => {
   if (mode === "play") { e.preventDefault(); view.tap(); }
 });
 
+view.on("zone", (z) => sfx.playMusic(trackFor(view.world.zone)));
+
 // ---- 일시정지
 function pause() {
   if (mode !== "play") return;
   mode = "paused";
+  sfx.duck(true);
   $("paused").classList.add("show");
   $("pause-btn").hidden = true;
 }
 function resume() {
   $("paused").classList.remove("show");
   mode = "play";
+  sfx.duck(false);
   view.last = performance.now();
   showScreen(null);
 }
@@ -132,6 +141,8 @@ view.on("death", (r) => {
   save.games++;
   save.coins += r.coins;
   const isBest = r.score > save.best;
+  sfx.duck(true);
+  sfx.jingle(isBest && r.score > 0 ? "jingle-best" : "jingle-over", 0.5);
   if (isBest) save.best = r.score;
   persist();
   $("o-reason").textContent = DEATH[r.reason] || "게임 오버";

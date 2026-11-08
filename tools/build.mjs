@@ -21,7 +21,7 @@ async function build() {
   await mkdir(path.join(root, "dist"), { recursive: true });
   await writeFile(path.join(root, "dist/index.html"), html);
   // 음악 등 정적 파일
-  await cp(path.join(root, "public"), path.join(root, "dist"), { recursive: true });
+  await cp(path.join(root, "public"), path.join(root, "dist"), { recursive: true }).catch(() => {});
   // claude.ai 아티팩트용: 문서 뼈대는 게시할 때 씌워지므로 doctype/html/head/body 태그를 뺀 판
   const frag = html
     .replace(/<!doctype html>\s*/i, "")

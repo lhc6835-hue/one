@@ -71,8 +71,7 @@ npm run build      # dist/index.html 한 파일로 빌드
 npm run dev        # http://localhost:5173
 ```
 
-GitHub Pages 배포는 빌드한 `dist/` 안의 `index.html`과 `music/`을 `gh-pages` 브랜치에 올리면 돼요.
-음악은 `fetch`로 불러오기 때문에 `dist/index.html`을 더블클릭해서 열면 합성 패드만 나와요. `npm run dev`로 띄워 주세요.
+GitHub Pages 배포는 빌드한 `dist/index.html` 한 파일을 `gh-pages` 브랜치에 올리면 돼요.
 
 ## 연출
 
@@ -90,23 +89,10 @@ GitHub Pages 배포는 빌드한 `dist/` 안의 `index.html`과 `music/`을 `gh-
   pixelfx 규약으로 만들었어요.
 - **손맛:** PERFECT 때 0.045초 히트스톱, 화면 흔들림, 섬광, 죽을 때 슬로모션.
 - **효과음:** WebAudio로 즉석 합성해요. 포획음이 콤보를 따라 5음계로 올라가요.
-- **배경음악:** 잔잔한 CC0 우주 앰비언트 트랙을 구역에 따라 2초 동안 천천히 크로스페이드해요.
-  깊이 올라갈수록 조금씩 긴장감이 붙어요. 게임오버와 일시정지 때는 음악이 먹먹해지고, 끝날 때 작은 징글이 나와요.
-  앰비언트 곡은 끝이 페이드아웃이라, 끝과 처음을 겹친 이음새 없는 루프로 다시 만들고 음량을 -18 LUFS로 맞췄어요.
-  트랙을 못 불러오면(예: `file://`로 열었을 때) 합성 패드로 대신해요.
-
-  | 쓰는 곳 | 곡 | 출처 · 라이선스 |
-  |---|---|---|
-  | 타이틀 | Observing The Star | YD · CC0 |
-  | 저궤도 · 성운 | Nautilus | poinl · CC0 |
-  | 소행성대 · 심우주 | Eerie Space Music (track 1) | Foozle(작곡 Potriel) · CC0 |
-  | 특이점 | Pressure | YD · CC0 |
-  | 게임오버 · 신기록 징글 | game_over, victory | Beatscribe, [homebrew_vgm](https://github.com/Beatscribe/homebrew_vgm) · CC0 |
-
-  YD · poinl 곡은 [Open Realms of Stars](https://github.com/tuomount/Open-Realms-of-Stars)의 크레딧(CC0 표기)에서,
-  Foozle 곡은 동봉된 Readme의 CC0 표기를 확인하고 가져왔어요.
-
-  파일은 `public/music/`에 OGG와 MP3로 들어 있고(사파리용 MP3), 빌드할 때 `dist/music/`으로 복사돼요.
+- **배경음:** 곡 대신 실시간으로 합성하는 우주 앰비언스예요. 구역과 상관없이 처음부터 끝까지 같은 분위기로 깔려요.
+  깊게 숨 쉬는 저음 드론, 필터가 아주 느리게 열고 닫히는 열린 화음 패드, 좌우로 흐르는 우주 바람(노이즈),
+  가끔 울리는 별 반짝임(맑은 종소리)이 모두 6초 잔향을 거쳐요. 파일이 없어서 반복 이음새도, 내려받을 것도 없어요.
+  게임오버와 일시정지 때는 먹먹해지고, 끝날 때 같은 잔향의 종소리가 울려요.
 
 ## 구조
 
@@ -126,5 +112,4 @@ tools/bot.mjs           공정성·난이도 검증 봇
 ## 크레딧
 
 - pixelfx © 2026 Patch, Hugo Duprez: MIT (`src/vendor/pixelfx/LICENSE`, `NOTICE.md`)
-- 음악: YD, poinl, Foozle/Potriel, Beatscribe (모두 CC0)
 - 폰트: Black Han Sans, Noto Sans KR, Press Start 2P (Google Fonts, OFL)

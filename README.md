@@ -90,16 +90,21 @@ GitHub Pages 배포는 빌드한 `dist/` 안의 `index.html`과 `music/`을 `gh-
   pixelfx 규약으로 만들었어요.
 - **손맛:** PERFECT 때 0.045초 히트스톱, 화면 흔들림, 섬광, 죽을 때 슬로모션.
 - **효과음:** WebAudio로 즉석 합성해요. 포획음이 콤보를 따라 5음계로 올라가요.
-- **배경음악:** CC0 칩튠 트랙을 구역에 따라 크로스페이드해요. 게임오버와 일시정지 때는 음악이 먹먹해지고, 끝날 때 징글이 나와요.
+- **배경음악:** 잔잔한 CC0 우주 앰비언트 트랙을 구역에 따라 2초 동안 천천히 크로스페이드해요.
+  깊이 올라갈수록 조금씩 긴장감이 붙어요. 게임오버와 일시정지 때는 음악이 먹먹해지고, 끝날 때 작은 징글이 나와요.
+  앰비언트 곡은 끝이 페이드아웃이라, 끝과 처음을 겹친 이음새 없는 루프로 다시 만들고 음량을 -18 LUFS로 맞췄어요.
   트랙을 못 불러오면(예: `file://`로 열었을 때) 합성 패드로 대신해요.
 
   | 쓰는 곳 | 곡 | 출처 · 라이선스 |
   |---|---|---|
-  | 타이틀 | Stage Select | Juhani Junkala, *Chiptune Adventures* · CC0 |
-  | 저궤도 · 성운 | Stage 1 | 〃 |
-  | 소행성대 · 심우주 | Stage 2 | 〃 |
-  | 특이점 | Boss Fight | 〃 |
+  | 타이틀 | Observing The Star | YD · CC0 |
+  | 저궤도 · 성운 | Nautilus | poinl · CC0 |
+  | 소행성대 · 심우주 | Eerie Space Music (track 1) | Foozle(작곡 Potriel) · CC0 |
+  | 특이점 | Pressure | YD · CC0 |
   | 게임오버 · 신기록 징글 | game_over, victory | Beatscribe, [homebrew_vgm](https://github.com/Beatscribe/homebrew_vgm) · CC0 |
+
+  YD · poinl 곡은 [Open Realms of Stars](https://github.com/tuomount/Open-Realms-of-Stars)의 크레딧(CC0 표기)에서,
+  Foozle 곡은 동봉된 Readme의 CC0 표기를 확인하고 가져왔어요.
 
   파일은 `public/music/`에 OGG와 MP3로 들어 있고(사파리용 MP3), 빌드할 때 `dist/music/`으로 복사돼요.
 
@@ -121,5 +126,5 @@ tools/bot.mjs           공정성·난이도 검증 봇
 ## 크레딧
 
 - pixelfx © 2026 Patch, Hugo Duprez: MIT (`src/vendor/pixelfx/LICENSE`, `NOTICE.md`)
-- 음악: Juhani Junkala (CC0), Beatscribe (CC0)
+- 음악: YD, poinl, Foozle/Potriel, Beatscribe (모두 CC0)
 - 폰트: Black Han Sans, Noto Sans KR, Press Start 2P (Google Fonts, OFL)

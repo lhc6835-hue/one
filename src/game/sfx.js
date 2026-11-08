@@ -1,5 +1,5 @@
 // 소리: 효과음은 WebAudio 로 즉석 합성하고(포획음은 콤보를 따라 5음계로 올라간다),
-// 배경음악은 CC0 칩튠 트랙을 불러와 구역마다 크로스페이드한다.
+// 배경음악은 CC0 우주 앰비언트 트랙을 불러와 구역마다 천천히 크로스페이드한다.
 
 const SCALE = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26, 28, 31];
 
@@ -18,7 +18,7 @@ export class Sfx {
     this.duckFilter.type = "lowpass";
     this.duckFilter.frequency.value = 20000;
     this.musicBus.connect(this.duckFilter).connect(this.master);
-    // 배경음악: CC0 칩튠 트랙(public/music). 못 불러오면 합성 패드로 대신한다.
+    // 배경음악: CC0 우주 앰비언트 트랙(public/music). 못 불러오면 합성 패드로 대신한다.
     const a = document.createElement("audio");
     this.ext = a.canPlayType('audio/ogg; codecs="vorbis"') ? "ogg" : "mp3";
     this.buffers = {};
@@ -75,8 +75,8 @@ export class Sfx {
     if (old) {
       old.gain.gain.cancelScheduledValues(now);
       old.gain.gain.setValueAtTime(old.gain.gain.value, now);
-      old.gain.gain.linearRampToValueAtTime(0, now + 0.9);
-      old.src.stop(now + 1);
+      old.gain.gain.linearRampToValueAtTime(0, now + 2.2);
+      old.src.stop(now + 2.3);
     }
     const src = c.createBufferSource(), g = c.createGain();
     src.buffer = t.buf;
@@ -84,7 +84,7 @@ export class Sfx {
     src.loopStart = t.start;
     src.loopEnd = t.end;
     g.gain.setValueAtTime(0, now);
-    g.gain.linearRampToValueAtTime(1, now + (old ? 0.9 : 0.4));
+    g.gain.linearRampToValueAtTime(1, now + (old ? 2.2 : 1.2)); // 앰비언트라 천천히 겹쳐 넘긴다
     src.connect(g).connect(this.musicBus);
     src.start(now, t.start);
     this.current = { name, src, gain: g };
@@ -104,7 +104,7 @@ export class Sfx {
     if (!t) return;
     const src = this.ctx.createBufferSource(), g = this.ctx.createGain();
     src.buffer = t.buf;
-    g.gain.value = 0.7;
+    g.gain.value = 0.35; // 칩튠 징글은 잔잔한 배경음 위에서 튀지 않게 작게
     src.connect(g).connect(this.master);
     src.start(this.ctx.currentTime + at, t.start);
   }

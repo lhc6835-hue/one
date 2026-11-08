@@ -33,11 +33,40 @@ body { touch-action: none; user-select: none; -webkit-user-select: none; -webkit
 #title { justify-content: flex-start; padding-top: max(6vh, 24px); cursor: pointer; }
 #title .spacer { flex: 1; }
 
-.logo { text-align: center; filter: drop-shadow(0 0 18px rgba(76, 232, 216, 0.45)); animation: float 4s ease-in-out infinite; pointer-events: none; }
-.logo-kr { font-family: var(--display); font-size: clamp(48px, 12vw, 96px); line-height: 1;
-  background: linear-gradient(180deg, #ffffff 0%, #c8fff6 35%, #4ce8d8 60%, #2a6cff 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.logo-en { font-family: var(--pixel); font-size: clamp(10px, 2.4vw, 15px); letter-spacing: 0.5em; padding-left: 0.5em; color: var(--pink);
-  margin-top: 10px; text-shadow: 0 0 10px rgba(245, 60, 209, 0.9); }
+/* ---- 타이틀 로고: ORBIT(크롬 + 입체 그림자 + 광택, 글자마다 둥실) / HOP(네온관 간판) / O 를 도는 혜성 */
+.logo { text-align: center; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.title { margin: 0; font-weight: 400; display: flex; flex-direction: column; align-items: center; line-height: 0.92; }
+.orbit { display: flex; font-family: "Audiowide", var(--display); font-size: clamp(58px, 16vw, 132px); letter-spacing: 0.03em; }
+.orbit .ch {
+  position: relative; display: inline-block;
+  background:
+    linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.95) 48%, transparent 58%) 0 0 / 300% 100% no-repeat,
+    linear-gradient(180deg, #ffffff 0%, #e4fdff 26%, #7cecf2 47%, #1c2f8f 49%, #3a3ad8 56%, #9a5cff 74%, #ff86e6 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 0 #241066) drop-shadow(0 3px 0 #1a0c4e) drop-shadow(0 4px 0 #110838) drop-shadow(0 0 16px rgba(76, 232, 216, 0.5));
+  animation: bob 3.4s ease-in-out infinite, shine 5.5s ease-in-out infinite;
+  animation-delay: calc(var(--i) * -0.22s), calc(var(--i) * 0.09s);
+}
+@keyframes bob { 50% { transform: translateY(-7px); } }
+@keyframes shine { 0%, 55% { background-position: 160% 0, 0 0; } 85%, 100% { background-position: -60% 0, 0 0; } }
+/* O 를 감싼 기울어진 궤도 고리와 그 위를 도는 혜성 */
+.orbit .o .ring { position: absolute; left: -26%; right: -26%; top: 36%; height: 34%; border-radius: 50%;
+  border: 2px solid rgba(160, 240, 255, 0.75); transform: rotate(-16deg);
+  box-shadow: 0 0 10px rgba(76, 232, 216, 0.7), inset 0 0 8px rgba(76, 232, 216, 0.4); }
+.orbit .o .spin { position: absolute; left: -26%; right: -26%; top: 36%; height: 34%; transform: rotate(-16deg); }
+.orbit .o .sat { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: #fff;
+  box-shadow: 0 0 6px #fff, 0 0 14px #4ce8d8, 0 0 26px #4ce8d8; offset-path: ellipse(50% 50% at 50% 50%); offset-rotate: 0deg;
+  animation: orbitSat 3.2s linear infinite; }
+@supports not (offset-path: ellipse(50% 50% at 50% 50%)) { .orbit .o .sat { display: none; } }
+@keyframes orbitSat { from { offset-distance: 0%; } to { offset-distance: 100%; } }
+.hop { font-family: "Monoton", var(--display); font-size: clamp(46px, 12.5vw, 104px); color: #ffe2f8; letter-spacing: 0.06em;
+  margin-top: -0.12em; transform: rotate(-5deg) translateX(18%);
+  text-shadow: 0 0 2px #fff, 0 0 8px #ff86e6, 0 0 18px #f53cd1, 0 0 36px #f53cd1, 0 0 64px #b0228f;
+  animation: neon 6s steps(1) infinite; }
+@keyframes neon { 0%, 61%, 64%, 67%, 100% { opacity: 1; } 62%, 65% { opacity: 0.45; } }
+.logo-sub { font-family: var(--display); font-size: clamp(13px, 3vw, 18px); letter-spacing: 0.3em; padding-left: 0.3em; color: #9cfff0;
+  text-shadow: 0 0 10px rgba(76, 232, 216, 0.8); display: flex; align-items: center; gap: 12px; }
+.logo-sub::before, .logo-sub::after { content: ""; width: clamp(24px, 8vw, 60px); height: 1px; background: linear-gradient(90deg, transparent, #4ce8d8, transparent); }
 @keyframes float { 50% { transform: translateY(-6px); } }
 
 .chips { display: flex; gap: 8px; pointer-events: none; }
@@ -110,6 +139,6 @@ body { touch-action: none; user-select: none; -webkit-user-select: none; -webkit
 body.playing .credit { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .logo, .badge, .tap-hint { animation: none; }
+  .logo, .badge, .tap-hint, .orbit .ch, .hop, .orbit .o .sat { animation: none; }
   .screen { transition: none; }
 }

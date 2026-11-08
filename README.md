@@ -71,7 +71,7 @@ npm run build      # dist/index.html 한 파일로 빌드
 npm run dev        # http://localhost:5173
 ```
 
-GitHub Pages 배포는 빌드한 `dist/index.html` 한 파일을 `gh-pages` 브랜치에 올리면 돼요.
+GitHub Pages 배포는 빌드한 `dist/` 안의 `index.html`과 `music/`을 `gh-pages` 브랜치에 올리면 돼요.
 
 ## 연출
 
@@ -89,10 +89,10 @@ GitHub Pages 배포는 빌드한 `dist/index.html` 한 파일을 `gh-pages` 브�
   pixelfx 규약으로 만들었어요.
 - **손맛:** PERFECT 때 0.045초 히트스톱, 화면 흔들림, 섬광, 죽을 때 슬로모션.
 - **효과음:** WebAudio로 즉석 합성해요. 포획음이 콤보를 따라 5음계로 올라가요.
-- **배경음:** 곡 대신 실시간으로 합성하는 우주 앰비언스예요. 구역과 상관없이 처음부터 끝까지 같은 분위기로 깔려요.
-  깊게 숨 쉬는 저음 드론, 필터가 아주 느리게 열고 닫히는 열린 화음 패드, 좌우로 흐르는 우주 바람(노이즈),
-  가끔 울리는 별 반짝임(맑은 종소리)이 모두 6초 잔향을 거쳐요. 파일이 없어서 반복 이음새도, 내려받을 것도 없어요.
-  게임오버와 일시정지 때는 먹먹해지고, 끝날 때 같은 잔향의 종소리가 울려요.
+- **배경음:** [Lights at Night](https://opengameart.org/content/lights-at-night)(Tsorthan Grove, CC0) 한 곡을 처음부터 끝까지 반복해요.
+  [ye](https://github.com/lhc6835-hue/ye) 프로젝트에서 쓰던 파일을 가져왔어요. 곡 끝 5초가 페이드아웃이라 처음과 겹쳐 이음새 없는 루프로 만들고,
+  음량을 -18 LUFS로 맞췄어요(`public/music/bgm.ogg`, 사파리용 `bgm.mp3`). 게임오버와 일시정지 때는 먹먹해져요.
+  곡을 못 불러오면(예: `dist/index.html`을 `file://`로 열었을 때) 실시간 합성 우주 앰비언스가 대신 깔려요.
 
 ## 구조
 
@@ -111,5 +111,6 @@ tools/bot.mjs           공정성·난이도 검증 봇
 
 ## 크레딧
 
+- 음악: Lights at Night, Tsorthan Grove (CC0)
 - pixelfx © 2026 Patch, Hugo Duprez: MIT (`src/vendor/pixelfx/LICENSE`, `NOTICE.md`)
 - 폰트: Black Han Sans, Noto Sans KR, Press Start 2P (Google Fonts, OFL)

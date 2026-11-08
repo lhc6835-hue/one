@@ -1,5 +1,6 @@
 // 소리: 효과음은 WebAudio 로 즉석 합성한다(포획음은 콤보를 따라 5음계로 올라간다).
-// 배경음은 곡이 아니라 실시간으로 합성하는 우주 앰비언스다. 구역과 상관없이 처음부터 끝까지 같은 분위기로 깔린다.
+// 배경음은 "Lights at Night"(Tsorthan Grove, CC0) 한 곡을 처음부터 끝까지 이음새 없이 반복한다(public/music/bgm.*).
+// 곡을 못 불러오면(file:// 로 열었을 때 등) 아래의 실시간 합성 우주 앰비언스가 대신 깔린다.
 //   저음 드론(숨 쉬듯 천천히) + 열린 화음 패드(필터가 느리게 열리고 닫힘) + 우주 바람(흐르는 노이즈)
 //   + 가끔 울리는 별 반짝임(맑은 종소리, 좌우 랜덤) → 전부 6초 잔향을 거친다.
 // 파일이 없으니 반복 이음새도 없고 내려받을 것도 없다.
@@ -33,9 +34,38 @@ export class Sfx {
     if (!this.musicStarted) {
       this.musicStarted = true;
       this.musicBus.gain.setValueAtTime(0, this.ctx.currentTime);
-      this.musicBus.gain.linearRampToValueAtTime(0.75, this.ctx.currentTime + 4); // 서서히 떠오르듯
-      this.startAmbience();
+      this.musicBus.gain.linearRampToValueAtTime(0.75, this.ctx.currentTime + 3); // 서서히 떠오르듯
+      this.startTrack().catch(() => this.startAmbience());
     }
+  }
+
+  /** 배경음 곡: OGG 를 먼저, 안 되면 MP3. 끝 5초를 처음과 겹쳐 둔 루프 파일이라 그대로 반복한다. */
+  async startTrack() {
+    const ogg = document.createElement("audio").canPlayType('audio/ogg; codecs="vorbis"');
+    const exts = ogg ? ["ogg", "mp3"] : ["mp3", "ogg"];
+    let buf = null;
+    for (const ext of exts) {
+      try {
+        const r = await fetch(`music/bgm.${ext}`);
+        if (!r.ok) continue;
+        buf = await this.ctx.decodeAudioData(await r.arrayBuffer());
+        break;
+      } catch {}
+    }
+    if (!buf) throw new Error("no track");
+    // mp3 앞뒤 인코더 무음은 건너뛴다
+    const d = buf.getChannelData(0), lim = Math.floor(buf.sampleRate * 0.15);
+    let a = 0, b = d.length - 1;
+    while (a < lim && Math.abs(d[a]) < 1e-4) a++;
+    while (b > d.length - lim && Math.abs(d[b]) < 1e-4) b--;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    src.loopStart = a / buf.sampleRate;
+    src.loopEnd = (b + 1) / buf.sampleRate;
+    src.connect(this.musicBus);
+    src.start(this.ctx.currentTime, src.loopStart);
+    this.track = src;
   }
 
   /** 예전 곡 전환 호출과 호환: 배경음은 하나뿐이라 아무것도 바꾸지 않는다 */
@@ -121,7 +151,7 @@ export class Sfx {
   best() { [0, 7, 12, 19, 24].forEach((s, i) => this.tone("square", 523 * Math.pow(2, s / 12), 0, 0.22, 0.05, i * 0.06)); }
 
   // ---------------------------------------------------------------------------------------
-  // 우주 앰비언스
+  // 우주 앰비언스(배경음 곡을 못 불러왔을 때만)
   makeReverb(seconds = 6) {
     const c = this.ctx, n = Math.floor(c.sampleRate * seconds);
     const ir = c.createBuffer(2, n, c.sampleRate);

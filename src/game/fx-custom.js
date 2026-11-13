@@ -193,4 +193,34 @@ function PALETTE_GOLD() {
   return ["#1e1206", "#4a2c08", "#86520c", "#c48412", "#f0b424", "#ffe066", "#fff6c4", "#ffffff"];
 }
 
+// ---------------------------------------------------------------------------------------------
+// 건너뛴 행성에서 혜성까지 빛줄기가 뻗어 와 꽂힌다(delay 만큼 기다렸다가). 원점은 건너뛴 행성, (tx, ty) 는 혜성까지의 변위.
+export const skipLink = {
+  meta: {
+    name: "Skip link",
+    desc: "After a short delay a bolt of gold light races from a skipped planet to the comet, flares at both ends and fades.",
+    size: [200, 200], origin: [100, 100], duration: 1.2, loop: false, fps: 30,
+    options: { palette: ["#1e1206", "#86520c", "#c48412", "#f0b424", "#ffe066", "#fff6c4", "#ffffff"], tx: 0, ty: -60, delay: 0, seed: 1 },
+  },
+  draw(p, t, o) {
+    const C = fit(o.palette, 7), u = t - o.delay;
+    if (u < 0) { p.glow(0, 0, 10, C[4], 0.25); return; }
+    const go = ease.outQuart(clamp(u / 0.22)), fade = 1 - seg(u, 0.25, 0.75);
+    if (fade <= 0) return;
+    const hx = o.tx * go, hy = o.ty * go, R = new Rng(o.seed);
+    // 살짝 지글거리는 번개 같은 선
+    let px = 0, py = 0;
+    const n = 9;
+    for (let i = 1; i <= n; i++) {
+      const k = i / n, j = i < n ? R.range(-3, 3) * fade : 0;
+      const nx = hx * k - (hy / (Math.hypot(hx, hy) || 1)) * j, ny = hy * k + (hx / (Math.hypot(hx, hy) || 1)) * j;
+      p.line(px, py, nx, ny, u < 0.08 ? WHITE : C[5], fade);
+      px = nx; py = ny;
+    }
+    p.glowLine(0, 0, hx, hy, 6, C[4], 0.35 * fade);
+    if (u < 0.3) sparkle(p, 0, 0, 6 * (1 - u / 0.3), C[6], C[4]);
+    if (go >= 1 && u < 0.45) sparkle(p, hx, hy, 7 * (1 - (u - 0.22) / 0.23), C[6], C[4]);
+  },
+};
+
 export { mix, clamp };

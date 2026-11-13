@@ -18,7 +18,7 @@ import * as shootingStars from "../vendor/pixelfx/fx/weather/shooting-stars.js";
 import * as zapHit from "../vendor/pixelfx/fx/lightning/zap-hit.js";
 import * as sunburst from "../vendor/pixelfx/fx/holy/sunburst.js";
 
-import { judgePop, tapRipple, noteBurst, feverBanner } from "./fx-custom.js";
+import { judgePop, tapRipple, noteBurst, feverBanner, skipLink } from "./fx-custom.js";
 import { World, orbitR, ZONES, PATH_DT, FLIGHTS, launchState, pathPoint } from "./world.js";
 import { drawPlanet, drawRock } from "./planets.js";
 import { SKINS } from "./skins.js";
@@ -193,6 +193,29 @@ export class View {
             this.spawn(confetti, { x: 0, y: this.camY + this.H * 0.55, seed: 4 });
             this.pop("NEW BEST!", PAL.gold, 0, this.camY + 70, 2);
           }
+          break;
+        }
+        case "skip": {
+          // 건너뛴 행성마다 차례로: 궤도 물결 + 금빛 폭죽 + 혜성까지 빛줄기, 마지막에 큰 SKIP 표시
+          const gold = PAL.gold;
+          e.planets.forEach((q, i) => {
+            const delay = 0.08 + i * 0.12;
+            this.spawn(skipLink, { x: q.x, y: q.y, tx: e.x - q.x, ty: e.y - q.y, delay, seed: i + 3 });
+            setTimeout(() => {
+              this.spawn(tapRipple, { x: q.x, y: q.y, r: q.r, palette: ["#4a2c08", "#c48412", "#ffe066", "#fff6c4", "#ffffff"] });
+              this.spawn(collectBurst, { x: q.x, y: q.y, palette: gold, seed: 20 + i });
+              S.bell(523 * Math.pow(2, [0, 4, 7, 12, 16, 19, 24][Math.min(6, i)] / 12), 0, 0.12, 0);
+            }, delay * 1000);
+          });
+          const end = 0.08 + e.planets.length * 0.12 + 0.15;
+          setTimeout(() => {
+            this.spawn(comboCounter, { x: 0, y: this.camY + 60, count: e.count, label: "SKIP", palette: gold, seed: 40 + e.count });
+            this.spawn(critHit, { x: e.x, y: e.y, angle: -Math.PI / 2, height: 0, palette: ["#2a1a08", "#6a4410", "#b07a1a", "#e8b030", "#ffe066", "#fff6c4", "#fffbe6", "#ffffff"], seed: 7 });
+            this.pop(`SKIP +${e.gain}`, gold, e.x, e.y - 22);
+            this.shake = Math.max(this.shake, 2 + e.count);
+            this.flash = 0.45; this.flashColor = "#ffe9a0";
+            S.zone();
+          }, end * 1000);
           break;
         }
         case "coin":

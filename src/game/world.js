@@ -415,6 +415,7 @@ export class World {
 
   capture(p, dx, dy) {
     const P = this.player, ro = orbitR(p);
+    const rescued = !!P.rescue;
     P.rescue = null;
     // 궤적 직선이 행성 중심에서 얼마나 떨어져 지나가는지: 가장자리를 스칠수록 PERFECT
     const sp = Math.hypot(P.vx, P.vy);
@@ -435,6 +436,19 @@ export class World {
       const gain = KINDS[p.kind].score * mult + (grade === "perfect" ? 1 : 0);
       this.score += gain;
       if (p.kind === "lava") p.fuse = p.fuseMax = Math.max(KINDS.lava.fuse, (TAU / p.omega) * 1.3);
+      // 건너뛰기: 출발 행성과 이번 행성 사이 높이에 있던, 아직 안 들른 행성들도 점수로 친다(방패 구조 비행은 제외)
+      const from = P.from;
+      if (from && from !== p && !rescued) {
+        const lo = Math.min(from.y, p.y), hi = Math.max(from.y, p.y);
+        const skipped = this.planets.filter((q) => q !== p && !q.visited && !q.dead && q.y > lo + 1 && q.y < hi - 1).sort((a, b) => b.y - a.y);
+        if (skipped.length) {
+          let skipGain = 0;
+          for (const q of skipped) { q.visited = true; skipGain += KINDS[q.kind].score * mult + 1; }
+          this.score += skipGain;
+          this.skips = (this.skips || 0) + skipped.length;
+          this.emit("skip", { planets: skipped.map((q) => ({ x: q.x, y: q.y, r: orbitR(q) })), count: skipped.length, gain: skipGain, x: P.x, y: P.y });
+        }
+      }
       const z = zoneAt(this.score);
       if (z !== this.zone) { this.zone = z; this.emit("zone", { zone: z }); }
       this.emit("capture", { planet: p, grade, gain, mult, combo: this.combo, x: P.x, y: P.y, fresh });
@@ -496,7 +510,6 @@ export class World {
     P.flyT += dt;
     this.voidY = Math.max(this.voidY, P.y + 40);
     if (d <= orbitR(q) || P.flyT > 2.5) {
-      P.rescue = null;
       if (d > orbitR(q)) { P.x = q.x; P.y = q.y - orbitR(q); }
       this.capture(q, P.x - q.x, P.y - q.y);
     }

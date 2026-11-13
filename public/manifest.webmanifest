@@ -1,0 +1,18 @@
+{
+  "name": "ORBIT HOP",
+  "short_name": "ORBIT HOP",
+  "description": "궤도를 돌다 탭 한 번으로 다음 행성으로 날아가는 원탭 픽셀 우주 게임",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "portrait",
+  "background_color": "#02030a",
+  "theme_color": "#02030a",
+  "lang": "ko",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

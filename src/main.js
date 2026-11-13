@@ -86,13 +86,31 @@ function onTap(e) {
     view.tap();
   }
 }
+// ---- 전체화면: 브라우저는 사용자의 터치·키 입력 순간에만 허락하므로, 입력이 들어올 때마다 아니면 들어간다.
+// (아이폰 사파리는 웹페이지 전체화면을 지원하지 않는다 → 홈 화면에 추가하면 manifest 덕분에 전체화면 앱으로 열린다)
+const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+const inStandalone = () => matchMedia("(display-mode: fullscreen), (display-mode: standalone)").matches || navigator.standalone;
+function goFullscreen() {
+  if (fsEl() || inStandalone()) return;
+  const el = document.documentElement, req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (!req) return;
+  try {
+    const r = req.call(el, { navigationUI: "hide" });
+    if (r && r.then) r.then(() => screen.orientation?.lock?.("portrait").catch(() => {})).catch(() => {});
+  } catch {}
+}
+document.addEventListener("fullscreenchange", () => setTimeout(() => view.resize(), 50));
+document.addEventListener("webkitfullscreenchange", () => setTimeout(() => view.resize(), 50));
+
 window.addEventListener("pointerdown", (e) => {
+  goFullscreen();
   sfx.unlock();
   if ($("skins").classList.contains("show") || $("paused").classList.contains("show")) return;
   if (mode === "title" || mode === "play") { e.preventDefault?.(); onTap(e); }
 });
 window.addEventListener("keydown", (e) => {
   if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key !== "Escape") goFullscreen();
   sfx.unlock();
   if (e.key === "Escape") {
     if ($("skins").classList.contains("show")) closeSkins();

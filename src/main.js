@@ -47,7 +47,15 @@ refreshTitle();
 
 // ---- 시작 / 다시
 const trackFor = (zone) => (zone >= 4 ? "boss" : zone >= 2 ? "stage2" : "stage1");
+// 한 판(run) 동안의 정산: 부활하면 같은 판이 이어지므로 코인·판 수를 두 번 세지 않는다
+const run = { banked: 0, counted: false };
+const REVIVE_COST = [30, 60, 120]; // 한 판에 최대 3번, 갈수록 비싸진다
+const REVIVE_TIME = 6; // 초. 이 안에 눌러야 부활할 수 있다
+let reviveTimer = 0;
+
 function startRun(fromTitle) {
+  run.banked = 0;
+  run.counted = false;
   sfx.unlock();
   sfx.playMusic(trackFor(0));
   sfx.duck(false);
@@ -92,6 +100,7 @@ window.addEventListener("keydown", (e) => {
     else if (mode === "paused") resume();
     return;
   }
+  if (mode === "over" && (e.key === "r" || e.key === "R")) { doRevive(); return; }
   if (mode === "over" && (e.key === " " || e.key === "Enter")) {
     if (Date.now() - overAt > 450) { e.preventDefault(); startRun(false); }
     return;
@@ -138,8 +147,9 @@ const TIPS = [
 view.on("death", (r) => {
   mode = "over";
   overAt = Date.now();
-  save.games++;
-  save.coins += r.coins;
+  if (!run.counted) { save.games++; run.counted = true; }
+  save.coins += r.coins - run.banked;
+  run.banked = r.coins;
   const isBest = r.score > save.best;
   sfx.duck(true);
   sfx.jingle(isBest && r.score > 0 ? "jingle-best" : "jingle-over", 0.5);
@@ -155,8 +165,47 @@ view.on("death", (r) => {
   $("o-tip").textContent = TIPS[Math.floor(Math.random() * TIPS.length)];
   countUp($("o-score"), r.score);
   showScreen("over");
+  offerRevive();
   setTimeout(() => $("retry").focus({ preventScroll: true }), 50);
 });
+
+// ---- 부활: 게임오버 화면에서 6초 안에, 코인을 내고 같은 판을 이어 간다
+function offerRevive() {
+  clearTimeout(reviveTimer);
+  const used = view.world.revives || 0;
+  const b = $("revive"), note = $("rv-note");
+  if (used >= REVIVE_COST.length) {
+    b.hidden = true;
+    note.hidden = false;
+    note.textContent = "이번 판 부활은 다 썼어요";
+    return;
+  }
+  const cost = REVIVE_COST[used];
+  $("rv-cost").textContent = cost;
+  b.hidden = false;
+  b.disabled = save.coins < cost;
+  note.hidden = !b.disabled;
+  note.textContent = b.disabled ? `코인이 ${cost - save.coins}개 부족해요` : "";
+  // 타이머 막대를 처음부터 다시 그린다
+  const bar = b.querySelector(".rv-timer");
+  bar.style.animation = "none"; void bar.offsetWidth; bar.style.animation = "";
+  b.style.setProperty("--rv-time", REVIVE_TIME + "s");
+  reviveTimer = setTimeout(() => { b.hidden = true; note.hidden = true; }, REVIVE_TIME * 1000);
+}
+function doRevive() {
+  const used = view.world.revives || 0, cost = REVIVE_COST[used];
+  if (mode !== "over" || $("revive").hidden || cost === undefined || save.coins < cost) return;
+  clearTimeout(reviveTimer);
+  save.coins -= cost;
+  persist();
+  if (!view.revive()) return;
+  $("revive").hidden = true;
+  mode = "play";
+  sfx.duck(false);
+  view.last = performance.now();
+  showScreen(null);
+}
+$("revive").addEventListener("click", doRevive);
 function countUp(el, target) {
   const t0 = performance.now(), D = 600;
   const step = (now) => {
@@ -166,7 +215,7 @@ function countUp(el, target) {
   };
   requestAnimationFrame(step);
 }
-$("retry").addEventListener("click", () => startRun(false));
+$("retry").addEventListener("click", () => { clearTimeout(reviveTimer); startRun(false); });
 $("o-home").addEventListener("click", goTitle);
 
 // ---- 스킨: 혜성마다 색과 비행 궤도가 다르다. 카드마다 궤도 미리보기가 움직인다.

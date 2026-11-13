@@ -367,11 +367,13 @@ export class World {
       P.theta += P.planet.omega * P.dir * dt;
       this.placeOnOrbit();
       if (P.y > this.voidY - 2) this.kill("void");
+    } else if (P.mode === "fly" && P.rescue) {
+      this.stepRescue(dt);
     } else if (P.mode === "fly") {
       const o = { x: P.x, y: P.y, vx: P.vx, vy: P.vy, t: P.flyT, curve: P.curve || 0, prof: this.prof };
       const gone = advance(o, dt, this.holes);
       P.x = o.x; P.y = o.y; P.vx = o.vx; P.vy = o.vy; P.flyT = o.t;
-      if (gone) { this.kill("hole"); return; }
+      if (gone) { this.kill("hole", gone); return; }
       for (const h of this.holes) {
         const d = Math.hypot(h.x - P.x, h.y - P.y);
         if (d < h.core + 13 && !h.passed) { h.passed = true; h.close = true; }
@@ -398,8 +400,9 @@ export class World {
         s.got = true; this.shield = true; this.emit("shield", { x: s.x, y: s.y });
       }
       for (const r of this.rocks) if (Math.hypot(r.x - P.x, r.y - P.y) < r.r + 2) {
-        if (this.shield) { this.shield = false; r.x = 1e6; this.emit("shieldBreak", { x: P.x, y: P.y }); }
-        else { this.kill("rock"); return; }
+        if (this.shield) r.x = 1e6; // 방패가 소행성도 부순다
+        this.kill("rock");
+        return;
       }
       if (P.y > this.voidY) { this.kill("void"); return; }
       if (Math.abs(P.x) > this.colW / 2 + 70 || P.flyT > 3.2) { this.kill("lost"); return; }
@@ -412,6 +415,7 @@ export class World {
 
   capture(p, dx, dy) {
     const P = this.player, ro = orbitR(p);
+    P.rescue = null;
     // 궤적 직선이 행성 중심에서 얼마나 떨어져 지나가는지: 가장자리를 스칠수록 PERFECT
     const sp = Math.hypot(P.vx, P.vy);
     const perp = Math.abs(dx * P.vy - dy * P.vx) / sp;
@@ -437,23 +441,95 @@ export class World {
     } else this.emit("capture", { planet: p, grade, gain: 0, mult: 1, combo: this.combo, x: P.x, y: P.y, fresh });
   }
 
-  kill(reason) {
+  /** 목숨을 잃을 상황. 금빛 방패가 있으면 어떤 이유든 한 번 구조한다. */
+  kill(reason, hole = null) {
     const P = this.player;
-    if (P.mode === "dead") return;
-    if (this.shield && (reason === "void" || reason === "boom")) {
-      // 방패가 한 번 살려 준다: 공허·폭발이면 위로 튕겨 올려 가장 가까운 위쪽 행성으로 날린다
-      this.shield = false;
-      const target = this.planets.find((p) => !p.dead && p.y < P.y - 20 && !p.visited) || this.planets[this.planets.length - 1];
-      const dx = target.x - P.x, dy = target.y - P.y, L = Math.hypot(dx, dy);
-      P.vx = (dx / L) * this.prof.speed; P.vy = (dy / L) * this.prof.speed;
-      P.mode = "fly"; P.flyT = 0; P.from = P.planet; P.curve = 0;
-      if (reason === "void") this.voidY = Math.max(this.voidY, P.y + 60);
-      this.emit("shieldBreak", { x: P.x, y: P.y });
-      return;
-    }
+    if (P.mode === "dead" || P.rescue) return;
+    if (this.shield) { this.rescue(reason, hole); return; }
     P.mode = "dead";
     this.deathReason = reason;
     this.emit("death", { reason, x: P.x, y: P.y });
+  }
+
+  /** 지금 위치에서 가장 가까운 안전한 행성(터지지 않고, 공허보다 충분히 위) */
+  safePlanet(x, y, margin = 90) {
+    let best = null, bd = Infinity;
+    for (const p of this.planets) {
+      if (p.dead || p.fuse > 0 || p.y > this.voidY - margin) continue;
+      const d = Math.hypot(p.x - x, p.y - y) + (p.visited ? 25 : 0) + (p.y > y ? 40 : 0); // 위쪽·새 행성을 조금 더 선호
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best || this.planets.filter((p) => !p.dead).sort((a, b) => a.y - b.y)[0];
+  }
+
+  /**
+   * 방패 구조: 방패가 깨지면서 가장 가까운 안전한 행성으로 곧장 유도 비행한다.
+   * 유도 비행 중에는 공허·블랙홀·소행성·화면 이탈에 걸리지 않는다. 블랙홀에서 구조되면 그 블랙홀은 무너진다.
+   */
+  rescue(reason, hole) {
+    const P = this.player;
+    this.shield = false;
+    if (reason === "hole" && hole) {
+      this.holes = this.holes.filter((h) => h !== hole);
+      this.emit("holeCollapse", { x: hole.x, y: hole.y });
+    }
+    if (P.mode === "orbit") P.from = P.planet;
+    P.mode = "fly";
+    P.flyT = 0;
+    P.curve = 0;
+    P.rescue = this.safePlanet(P.x, P.y);
+    this.voidY = Math.max(this.voidY, P.y + 70, P.rescue.y + 150);
+    this.emit("shieldBreak", { x: P.x, y: P.y, reason });
+  }
+
+  /** 유도 비행 한 스텝: 목표 행성 궤도에 닿으면 붙잡힌다 */
+  stepRescue(dt) {
+    const P = this.player, p = P.rescue;
+    if (p.dead) P.rescue = this.safePlanet(P.x, P.y);
+    const q = P.rescue, dx = q.x - P.x, dy = q.y - P.y, d = Math.hypot(dx, dy) || 1;
+    const sp = this.prof.speed * 1.6;
+    // 부드럽게 방향을 틀며 날아간다
+    const k = Math.min(1, dt * 10);
+    P.vx += ((dx / d) * sp - P.vx) * k;
+    P.vy += ((dy / d) * sp - P.vy) * k;
+    P.x += P.vx * dt; P.y += P.vy * dt;
+    P.flyT += dt;
+    this.voidY = Math.max(this.voidY, P.y + 40);
+    if (d <= orbitR(q) || P.flyT > 2.5) {
+      P.rescue = null;
+      if (d > orbitR(q)) { P.x = q.x; P.y = q.y - orbitR(q); }
+      this.capture(q, P.x - q.x, P.y - q.y);
+    }
+  }
+
+  /**
+   * 부활: 죽은 자리에서 가장 가까운 안전한 행성 궤도에 다시 선다.
+   * 공허를 아래로 밀어내고, 근처 블랙홀·소행성을 치우고, 보호용 금빛 방패를 하나 준다.
+   */
+  revive() {
+    const P = this.player;
+    if (P.mode !== "dead") return false;
+    const dx = P.x, dy = P.y;
+    const p = this.safePlanet(dx, dy, 140);
+    if (p.fuse > 0) p.fuse = 0;
+    this.holes = this.holes.filter((h) => Math.hypot(h.x - p.x, h.y - p.y) > 110);
+    for (const r of this.rocks) if (Math.abs(r.y - p.y) < 70) r.x = -Math.sign(r.vx || 1) * r.span;
+    P.planet = p;
+    P.mode = "orbit";
+    P.theta = -Math.PI / 2;
+    P.dir = Math.random() < 0.5 ? 1 : -1;
+    P.from = null;
+    P.rescue = null;
+    P.trail = [];
+    this.placeOnOrbit();
+    p.visited = true;
+    this.voidY = Math.max(this.voidY, p.y + 220);
+    this.shield = true;
+    this.combo = 0;
+    this.deathReason = null;
+    this.revives = (this.revives || 0) + 1;
+    this.emit("revive", { x: P.x, y: P.y, planet: p });
+    return true;
   }
 
   cull() {

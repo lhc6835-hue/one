@@ -134,6 +134,13 @@ export class View {
     this.fx.push(createFx(mod, opts));
   }
 
+  /** 부활: 세계에 부활을 요청하고, 성공하면 다시 살아난 화면으로 돌아간다 */
+  revive() {
+    const ok = this.world.revive();
+    if (ok) this.handleEvents();
+    return ok;
+  }
+
   tap() {
     if (this.dead) return false;
     const ok = this.world.tap();
@@ -205,9 +212,26 @@ export class View {
         case "shieldBreak":
           S.shieldBreak();
           this.spawn(zapHit, { x: e.x, y: e.y, palette: PAL.electric, seed: 5 });
-          this.flash = 0.5; this.flashColor = "#9cd8ff";
+          this.spawn(manaBurst, { x: e.x, y: e.y + 20, palette: PAL.holy, seed: 6 });
+          this.flash = 0.5; this.flashColor = "#ffe9a0";
           this.shake = Math.max(this.shake, 3);
+          this.pop("SAVED!", PAL.holy, e.x, e.y - 16);
           break;
+        case "holeCollapse":
+          S.boom();
+          this.spawn(plasmaExplosion, { x: e.x, y: e.y, palette: ["#05010a", "#1c0a30", "#4a1a8c", "#8a3ce0", "#c48cff", "#f0d8ff", "#ffffff"], seed: 21 });
+          this.shake = Math.max(this.shake, 5);
+          break;
+        case "revive": {
+          S.shield();
+          this.dead = false;
+          this.slowmo = 0;
+          this.flash = 0.8; this.flashColor = "#fff2c0";
+          this.spawn(manaBurst, { x: e.x, y: e.y + 24, palette: PAL.holy, seed: 8 });
+          this.spawn(collectBurst, { x: e.x, y: e.y, palette: PAL.gold, seed: 8 });
+          this.pop("REVIVE!", PAL.gold, e.x, e.y - 18);
+          break;
+        }
         case "planetBoom":
           S.boom();
           this.spawn(plasmaExplosion, { x: e.planet.x, y: e.planet.y, palette: ["#2a0604", "#6a1004", "#b02808", "#f05a10", "#ff9a2a", "#ffd86a", "#ffffff"], accent: ["#2a0a04", "#7a2a08", "#ff7a1a", "#ffd06a", "#fff6d0"], seed: e.planet.id });
@@ -533,6 +557,7 @@ export class View {
       for (const [s0, s1] of segs) piece(s0, s1, 1 + 1.8 * wd(s0), (u, v) => (v < 0.6 ? WHITE : R[5]), Math.min(1, 1.2 * fade(s0)));
     }
     // 몸
+    if (Pl.rescue) p.glow(Pl.x, Pl.y, 22, hex("#ffd84a"), 0.7);
     p.glow(Pl.x, Pl.y, 14, R[4], 0.6);
     p.circle(Pl.x, Pl.y, 2.6, (d) => (d < 0.4 ? WHITE : R[5]));
     p.px(Pl.x, Pl.y, WHITE);
